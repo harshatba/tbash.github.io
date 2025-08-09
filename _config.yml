@@ -1,6 +1,6 @@
 title: "$ whoami"
 description: "echo 'thoughts, code, and everything in between'"
-url: "https://harshatba.github.io" # Domain of your site
+url: "https://tbash.xyz" # Domain of your site
 baseurl: "" # Leave empty since this is your main GitHub Pages site
 
 theme: no-style-please
