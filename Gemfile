@@ -1,7 +1,6 @@
 source "https://rubygems.org"
 
 gem "jekyll", "~> 4.3.3"
-gem "minimal-mistakes-jekyll"
 gem "webrick", "~> 1.8"
 
 group :jekyll_plugins do
@@ -11,4 +10,5 @@ group :jekyll_plugins do
   gem "jekyll-include-cache"
   gem "jekyll-paginate"
   gem "jekyll-gist"
+  gem "jekyll-remote-theme"
 end

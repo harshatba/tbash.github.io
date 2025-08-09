@@ -1,5 +1,5 @@
 # Theme Settings
-theme: minimal-mistakes-jekyll
+remote_theme: "mmistakes/minimal-mistakes@4.24.0"
 minimal_mistakes_skin: "default" # "air", "aqua", "contrast", "dark", "dirt", "neon", "mint", "plum", "sunrise"
 
 # Site Settings
@@ -11,13 +11,12 @@ description: "Personal website and blog"
 url: "https://harshatba.github.io"
 baseurl: "/tbash.github.io"
 repository: "harshatba/tbash.github.io"
-logo: "/assets/images/logo.png"
 masthead_title: "tbash.xyz"
 
 # Site Author
 author:
   name: "Your Name"
-  avatar: "/assets/images/bio-photo.jpg"
+  avatar: "/assets/images/bio-photo.jpg" # path of avatar image, e.g. "/assets/images/bio-photo.jpg"
   bio: "Write a short bio here"
   location: "Your Location"
   links:
@@ -106,7 +105,7 @@ plugins:
   - jekyll-gist
   - jekyll-feed
   - jekyll-include-cache
-  - jekyll-seo-tag
+  - jekyll-remote-theme
 
 # Archives
 category_archive:
