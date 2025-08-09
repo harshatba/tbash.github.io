@@ -1,15 +1,15 @@
-title: tbash
-description: Personal website
+title: "$ whoami"
+description: "echo 'thoughts, code, and everything in between'"
 url: "https://harshatba.github.io" # Domain of your site
 baseurl: "" # Leave empty since this is your main GitHub Pages site
 
 theme: no-style-please
-author: Your Name
+author: Harsha
 
 # No style please theme settings
 theme_config:
   appearance: "auto" # can be "light", "dark" or "auto"
-  back_home_text: ".." # customize text for homepage link in post layout
+  back_home_text: "cd .." # customize text for homepage link in post layout
   date_format: "%Y-%m-%d" # customize how date is formatted
   show_description: true # show blog description
   show_title: true # show blog title
