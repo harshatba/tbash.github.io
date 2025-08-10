@@ -1,18 +1,20 @@
 title: ""
 description: "Writing observations, thoughts and for my clarity"
-url: "https://tbash.xyz" # Domain of your site
-baseurl: "" # Leave empty since this is your main GitHub Pages site
+url: "https://tbash.xyz"
+baseurl: ""
 
-theme: no-style-please
-author: Harsha
+# Theme settings
+theme: jekyll-theme-console
+header_pages:
+  - index.md
+  - about.md
 
-# No style please theme settings
-theme_config:
-  appearance: "auto" # can be "light", "dark" or "auto"
-  back_home_text: "cd .." # customize text for homepage link in post layout
-  date_format: "%Y-%m-%d" # customize how date is formatted
-  show_description: true # show blog description
-  show_title: true # show blog title
+style: dark # dark (default), light or hacker
+listen_for_clients_preferred_style: true # true (default) or false
+
+# Console theme settings
+footer: 'follow me on <a href="https://github.com/harshatba">github</a>'
+google_analytics: # your google analytics id
 
 # Build settings
 markdown: kramdown

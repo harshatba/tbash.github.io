@@ -1,4 +1,5 @@
 ---
 layout: home
-title: "~/tbash > _"
+title: /
+permalink: /
 ---
