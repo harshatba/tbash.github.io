@@ -3,7 +3,7 @@ description: "Writing observations, thoughts and for my clarity"
 url: "https://tbash.xyz" # Domain of your site
 baseurl: "" # Leave empty since this is your main GitHub Pages site
 
-theme: no-style-please
+# remote_theme: riggraz/no-style-please
 author: Harsha
 
 # No style please theme settings
