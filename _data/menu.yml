@@ -1,7 +1,5 @@
 entries:
-  - title: posts
-    post_list:
-      limit: 5
-      show_more: true
-      show_more_text: See archive...
-      show_more_url: /posts
+  - title: Writing number 1
+    url: /writing-number-1/
+  - title: Welcome to My Blog
+    url: /welcome/
