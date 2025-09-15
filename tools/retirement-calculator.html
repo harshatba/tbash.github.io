@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retirement & Investment Calculator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+
+        .container {
+            background: rgba(30, 41, 59, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        /* Make header and intro span full width */
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* Inputs section container */
+        .inputs-container {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Results positioned in second column */
+        .results-container {
+            align-self: start;
+            position: sticky;
+            top: 30px;
+        }
+
+        /* Responsive layout for mobile */
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .results-container {
+                position: static;
+            }
+        }
+
+        h1 {
+            text-align: center;
+            color: #f8fafc;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #60a5fa, #34d399, #fbbf24);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 0 30px rgba(96, 165, 250, 0.3);
+        }
+
+        .real-time-indicator {
+            text-align: center;
+            color: #34d399;
+            font-size: 16px;
+            margin: 20px 0;
+            padding: 10px;
+            background: rgba(52, 211, 153, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(52, 211, 153, 0.3);
+        }
+
+        .input-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            background: rgba(51, 65, 85, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            border-left: 4px solid #60a5fa;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .input-group:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(96, 165, 250, 0.2);
+            background: rgba(51, 65, 85, 0.9);
+        }
+
+        .input-group h3 {
+            margin: 0 0 15px 0;
+            color: #f1f5f9;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #cbd5e1;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #475569;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            background: rgba(30, 41, 59, 0.8);
+            color: #f1f5f9;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+            background: rgba(30, 41, 59, 1);
+        }
+
+        input::placeholder {
+            color: #64748b;
+        }
+
+        .results-section {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+
+        .results-section.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(30, 41, 59, 0.9);
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            font-size: 14px;
+        }
+
+        .results-table th,
+        .results-table td {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+            vertical-align: top;
+        }
+
+        .results-table th {
+            background: linear-gradient(135deg, #1e293b, #334155);
+            color: #f1f5f9;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            letter-spacing: 0.5px;
+        }
+
+        .results-table td {
+            color: #e2e8f0;
+            transition: background-color 0.2s ease;
+        }
+
+        .results-table tr:hover td {
+            background-color: rgba(51, 65, 85, 0.5);
+        }
+
+        .money {
+            font-weight: 600;
+            color: #34d399;
+        }
+
+        .tax-negative {
+            color: #ef4444 !important;
+        }
+
+        .summary {
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 20px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+        }
+
+        .summary h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.5em;
+        }
+
+        .summary .total-amount {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 15px 0;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .breakdown-text {
+            font-size: 0.85em;
+            line-height: 1.3;
+        }
+
+        #tax-rates-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+        }
+
+        #tax-rates-container > div {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(51, 65, 85, 0.5);
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        #tax-rates-container label {
+            margin-bottom: 0;
+            color: #cbd5e1;
+        }
+
+        #tax-rates-container span {
+            font-weight: 600;
+            color: #93c5fd;
+        }
+
+        .investment-strategy {
+            border: 1px solid #475569;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background: rgba(51, 65, 85, 0.3);
+        }
+
+        .investment-strategy label {
+            font-size: 0.85em;
+        }
+
+        small {
+            display: block;
+            margin-top: -10px;
+            margin-bottom: 10px;
+            font-size: 0.8em;
+            color: #94a3b8;
+        }
+
+        .warning {
+            color: #f87171; /* A noticeable red color */
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="full-width">💰 Retirement & Investment Calculator</h1>
+
+        <div class="real-time-indicator full-width">
+            ⚡ Real-time calculations - Results update as you type!
+        </div>
+
+        <div class="inputs-container">
+            <div class="input-section">
+            <div class="input-group">
+                <h3>📊 Basic Information</h3>
+                <label>Annual Income ($):</label>
+                <input type="number" id="income" value="263000" placeholder="e.g., 80000">
+
+                <label>Monthly Spending ($):</label>
+                <input type="number" id="monthlySpending" value="3200" placeholder="e.g., 2000">
+
+                <label>Number of Years:</label>
+                <input type="number" id="years" value="10" placeholder="e.g., 30">
+            </div>
+
+            <div class="input-group">
+                <h3>🏦 Traditional IRA</h3>
+                <label>Contribution ($ per year):</label>
+                <input type="number" id="iraContribution" value="0" step="100" placeholder="e.g., 7000">
+                <small>Max: <span id="iraMax"></span>. Deductibility: <span id="iraDeductibility"></span> <span class="warning" id="iraWarning"></span></small>
+
+                <label>Expected Annual Return (%):</label>
+                <input type="number" id="iraReturn" value="7" step="0.1" placeholder="e.g., 7">
+            </div>
+
+            <div class="input-group">
+                <h3>🌟 Roth IRA</h3>
+                <label>Contribution ($ per year):</label>
+                <input type="number" id="rothContribution" value="0" step="100" placeholder="e.g., 6500">
+                <small>Max: <span id="rothMax"></span>. Eligibility issues: <span id="rothEligibility"></span> <span class="warning" id="rothWarning"></span></small>
+
+
+                <label>Expected Annual Return (%):</label>
+                <input type="number" id="rothReturn" value="7" step="0.1" placeholder="e.g., 7">
+                <label style="margin-top: 10px;">Backdoor Roth Contribution ($ per year):</label>
+                <input type="number" id="backdoorRothContribution" value="0" step="100" placeholder="e.g., 6500">
+                <small>Uses non-deductible Traditional IRA + immediate conversion. <span class="warning" id="backdoorWarning"></span></small>
+            </div>
+
+            <div class="input-group">
+                <h3>🏦 Traditional 401k</h3>
+                <label>Contribution (% of income):</label>
+                <input type="number" id="t401kPercent" value="0" step="0.1" placeholder="e.g., 10">
+                <small>Max: <span id="t401kMax"></span> <span class="warning" id="t401kWarning"></span></small>
+                <button id="fill-max-match" style="margin-top: 8px; width: 100%; padding: 8px; border-radius: 8px; border: 2px solid #475569; background: #334155; color: #f1f5f9; cursor: pointer;">Fill to Get Max Match</button>
+
+                <label>Expected Annual Return (%):</label>
+                <input type="number" id="t401kReturn" value="7" step="0.1" placeholder="e.g., 7">
+
+                <label style="margin-top: 10px;">Employer Match Rate (% of your contribution):</label>
+                <input type="number" id="t401kMatchRate" value="0" step="1" placeholder="e.g., 50">
+                <label>Employer Match Cap (% of salary eligible for match):</label>
+                <input type="number" id="t401kMatchCapPercent" value="0" step="0.1" placeholder="e.g., 6">
+                <small>Example: 50% match up to 6% of salary caps the match at 3% of salary.</small>
+            </div>
+
+            <div class="input-group">
+                <h3>🚀 Roth 401k</h3>
+                <label>Contribution (% of income):</label>
+                <input type="number" id="r401kPercent" value="0" step="0.1" placeholder="e.g., 5">
+                <small>Max: <span id="r401kMax"></span> <span class="warning" id="r401kWarning"></span></small>
+
+                <label>Expected Annual Return (%):</label>
+                <input type="number" id="r401kReturn" value="7" step="0.1" placeholder="e.g., 7">
+            </div>
+        </div>
+
+        <div class="input-group" id="tax-rates-group">
+            <h3>
+                🏛️ Tax Information (Auto-Calculated for CA)
+                <a href="#" id="toggle-tax-breakdown" style="font-size: 0.7em; font-weight: normal; margin-left: 15px;">Show Breakdown</a>
+            </h3>
+            <div id="tax-rates-container">
+                <div><label>Federal Tax Rate:</label><span id="federalTaxRate">--%</span></div>
+                <div><label>CA State Tax Rate:</label><span id="stateTaxRate">--%</span></div>
+                <div><label>Social Security:</label><span id="socialSecurityRate">6.2%</span></div>
+                <div><label>Medicare:</label><span id="medicareRate">1.45%</span></div>
+                <div><label>Retirement Federal Tax:</label><span id="retirementFederalTax">--%</span></div>
+                <div><label>Retirement CA State Tax:</label><span id="retirementStateTax">--%</span></div>
+                <div><label>Capital Gains Federal:</label><span id="capitalGainsFederal">--%</span></div>
+                <div><label>Capital Gains CA:</label><span id="capitalGainsCA">--%</span></div>
+                <div style="background: #1e293b; grid-column: 1 / -1; text-align: center; padding: 10px; border-radius: 8px; margin-top: 10px;">
+                    <label style="font-size: 1.1em; color: #f1f5f9;">Monthly Savings Available for Investment:</label>
+                    <span id="annualSavings" style="font-size: 1.2em; font-weight: bold; color: #34d399;">$0</span>
+                </div>
+            </div>
+            <div id="tax-breakdown" style="display: none; margin-top: 20px;">
+                <h4>Tax Breakdown Details</h4>
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Tax Type</th>
+                            <th>Annual Amount</th>
+                            <th>Monthly Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tax-breakdown-body">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <h3>
+                📈 Investment Strategies
+                <span class="warning" id="strategyWarning" style="font-size: 0.8em; margin-left: 10px;"></span>
+            </h3>
+            <div id="investment-strategies">
+                <!-- Strategies will be added here dynamically -->
+            </div>
+            <button id="add-strategy" style="margin-top: 15px; width: 100%; padding: 10px; border-radius: 8px; border: 2px solid #475569; background: #334155; color: #f1f5f9; cursor: pointer;">+ Add Investment Strategy</button>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            <button id="export-xlsx" style="padding: 12px 25px; font-size: 1.1em; border-radius: 10px; border: none; background: #10b981; color: white; cursor: pointer; box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);">📊 Export to XLSX</button>
+        </div>
+        </div>
+
+        <div class="results-container">
+            <div class="results-section" id="results">
+            <table class="results-table" id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Investment Type</th>
+                        <th>Monthly Contribution</th>
+                        <th>Monthly Tax Impact</th>
+                        <th>Total Contributions</th>
+                        <th>Pre-Tax Value</th>
+                        <th>Total Tax Deducted</th>
+                        <th>After-Tax Value</th>
+                        <th>Net Growth</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody">
+                </tbody>
+            </table>
+
+            <div class="summary" id="summary">
+                <h3>Total After-Tax Portfolio Value</h3>
+                <div class="total-amount" id="totalAmount">$0</div>
+                <p>Your investment portfolio will be worth <strong id="totalAmountText">$0</strong> after taxes in <span id="yearsText">0</span> years!</p>
+                <div id="income-summary" style="font-size: 0.9em; margin-top: 15px; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.3); padding-top: 15px;">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script>
+        const FEDERAL_TAX_BRACKETS_2024 = [
+            { rate: 0.10, maxIncome: 11600 },
+            { rate: 0.12, maxIncome: 47150 },
+            { rate: 0.22, maxIncome: 100525 },
+            { rate: 0.24, maxIncome: 191950 },
+            { rate: 0.32, maxIncome: 243725 },
+            { rate: 0.35, maxIncome: 609350 },
+            { rate: 0.37, maxIncome: Infinity }
+        ];
+
+        const CA_TAX_BRACKETS_2024 = [
+            { rate: 0.01, maxIncome: 10412 },
+            { rate: 0.02, maxIncome: 24684 },
+            { rate: 0.04, maxIncome: 38959 },
+            { rate: 0.06, maxIncome: 54081 },
+            { rate: 0.08, maxIncome: 68350 },
+            { rate: 0.093, maxIncome: 349137 },
+            { rate: 0.103, maxIncome: 418961 },
+            { rate: 0.113, maxIncome: 698271 },
+            { rate: 0.123, maxIncome: Infinity }
+        ];
+
+        const CONTRIBUTION_LIMITS_2025 = {
+            ira: 7000,
+            t401k: 23000,
+            r401k: 23000,
+            rothPhaseOutStart: 150000,
+            rothPhaseOutEnd: 165000,
+            tradIraDeductibilityPhaseOutStart: 79000,
+            tradIraDeductibilityPhaseOutEnd: 89000
+        };
+
+        const SS_WAGE_BASE_2024 = 168600;
+
+        function calculateFutureValue(annualContribution, annualReturn, years) {
+            // Handle edge cases to avoid precision errors
+            if (annualContribution <= 0) {
+                return 0; // No contribution means no future value
+            }
+
+            if (annualReturn === 0) {
+                return annualContribution * years; // No return means simple multiplication
+            }
+
+            const monthlyContribution = annualContribution / 12;
+            const monthlyReturn = annualReturn / 100 / 12;
+            const months = years * 12;
+
+            // Standard future value formula for regular contributions with interest
+            const futureValue = monthlyContribution * (Math.pow(1 + monthlyReturn, months) - 1) / monthlyReturn;
+
+            // Round to avoid floating point precision issues
+            return Math.round(futureValue * 100) / 100;
+        }
+
+        function calculateProgressiveTax(income, brackets) {
+            let tax = 0;
+            let remainingIncome = income;
+            let previousMax = 0;
+
+            for (const bracket of brackets) {
+                if (remainingIncome > 0) {
+                    const taxableInBracket = Math.min(remainingIncome, bracket.maxIncome - previousMax);
+                    if (taxableInBracket <= 0) continue;
+
+                    tax += taxableInBracket * bracket.rate;
+                    remainingIncome -= taxableInBracket;
+                    previousMax = bracket.maxIncome;
+                }
+            }
+            return tax;
+        }
+
+
+        function calculateInvestments() {
+            // Get basic inputs
+            const income = parseFloat(document.getElementById('income').value) || 0;
+            const years = parseInt(document.getElementById('years').value) || 0;
+            const monthlySpending = parseFloat(document.getElementById('monthlySpending').value) || 0;
+            const annualSpending = monthlySpending * 12;
+
+            // Get retirement contributions - ensure we convert the input values properly
+            let iraContribution = document.getElementById('iraContribution').value !== '' ?
+                parseFloat(document.getElementById('iraContribution').value) : 0;
+
+            const iraReturn = document.getElementById('iraReturn').value !== '' ?
+                parseFloat(document.getElementById('iraReturn').value) : 0;
+
+            let rothContribution = document.getElementById('rothContribution').value !== '' ?
+                parseFloat(document.getElementById('rothContribution').value) : 0;
+
+            const rothReturn = document.getElementById('rothReturn').value !== '' ?
+                parseFloat(document.getElementById('rothReturn').value) : 0;
+
+            // Backdoor Roth (post-tax contribution via non-deductible IRA + immediate conversion)
+            const backdoorRothInput = document.getElementById('backdoorRothContribution')?.value !== '' ?
+                parseFloat(document.getElementById('backdoorRothContribution').value) : 0;
+
+            const t401kPercent = document.getElementById('t401kPercent').value !== '' ?
+                parseFloat(document.getElementById('t401kPercent').value) : 0;
+
+            const t401kReturn = document.getElementById('t401kReturn').value !== '' ?
+                parseFloat(document.getElementById('t401kReturn').value) : 0;
+
+            const r401kPercent = document.getElementById('r401kPercent').value !== '' ?
+                parseFloat(document.getElementById('r401kPercent').value) : 0;
+
+            const r401kReturn = document.getElementById('r401kReturn').value !== '' ?
+                parseFloat(document.getElementById('r401kReturn').value) : 0;
+
+            // Employer match inputs for Traditional 401k
+            const t401kMatchRate = document.getElementById('t401kMatchRate').value !== '' ?
+                parseFloat(document.getElementById('t401kMatchRate').value) : 0;
+            const t401kMatchCapPercent = document.getElementById('t401kMatchCapPercent').value !== '' ?
+                parseFloat(document.getElementById('t401kMatchCapPercent').value) : 0;
+
+            // --- Contribution Validation and Capping ---
+            let finalIraContribution = iraContribution;
+            let finalRothContribution = rothContribution;
+            let desiredT401k = income * (t401kPercent / 100);
+            let desiredR401k = income * (r401kPercent / 100);
+            let finalT401kContribution = desiredT401k;
+            let finalR401kContribution = desiredR401k;
+
+
+            // Clear previous warnings
+            document.getElementById('iraWarning').textContent = '';
+            document.getElementById('rothWarning').textContent = '';
+            document.getElementById('t401kWarning').textContent = '';
+            document.getElementById('r401kWarning').textContent = '';
+            document.getElementById('iraDeductibility').textContent = '';
+            const backdoorWarningEl = document.getElementById('backdoorWarning');
+            if (backdoorWarningEl) backdoorWarningEl.textContent = '';
+
+            // IRA
+            if (finalIraContribution > CONTRIBUTION_LIMITS_2025.ira) {
+                document.getElementById('iraWarning').textContent = 'Over limit!';
+                finalIraContribution = CONTRIBUTION_LIMITS_2025.ira;
+            }
+
+            // Roth IRA
+            if (finalRothContribution > CONTRIBUTION_LIMITS_2025.ira) {
+                document.getElementById('rothWarning').textContent = 'Over limit!';
+                finalRothContribution = CONTRIBUTION_LIMITS_2025.ira;
+            }
+
+            // Combined 401k Check
+            const total401kContribution = desiredT401k + desiredR401k;
+            if (total401kContribution > CONTRIBUTION_LIMITS_2025.t401k) {
+                const warningMsg = 'Combined 401k limit exceeded!';
+                document.getElementById('t401kWarning').textContent = warningMsg;
+                document.getElementById('r401kWarning').textContent = warningMsg;
+
+                // Scale contributions down proportionally
+                const scalingFactor = CONTRIBUTION_LIMITS_2025.t401k / total401kContribution;
+                finalT401kContribution = desiredT401k * scalingFactor;
+                finalR401kContribution = desiredR401k * scalingFactor;
+            }
+
+
+            // Update UI Max displays
+            document.getElementById('iraMax').textContent = `$${CONTRIBUTION_LIMITS_2025.ira.toLocaleString()}`;
+            document.getElementById('rothMax').textContent = `$${CONTRIBUTION_LIMITS_2025.ira.toLocaleString()}`;
+            document.getElementById('t401kMax').textContent = `$${CONTRIBUTION_LIMITS_2025.t401k.toLocaleString()}`;
+            document.getElementById('r401kMax').textContent = `$${CONTRIBUTION_LIMITS_2025.r401k.toLocaleString()}`;
+
+
+            // Roth IRA income eligibility
+            let rothEligibilityMessage = 'Eligible';
+            // Store the original contribution value before applying income limits
+            const originalRothContribution = finalRothContribution;
+
+            if (income > CONTRIBUTION_LIMITS_2025.rothPhaseOutStart) {
+                const overLimit = income - CONTRIBUTION_LIMITS_2025.rothPhaseOutStart;
+                const phaseOutRange = CONTRIBUTION_LIMITS_2025.rothPhaseOutEnd - CONTRIBUTION_LIMITS_2025.rothPhaseOutStart;
+                const reductionPercent = Math.min(overLimit / phaseOutRange, 1);
+
+                // Apply the reduction due to income phaseout
+                finalRothContribution = Math.round(originalRothContribution * (1 - reductionPercent) * 100) / 100; // Round to cents
+
+                // Update the eligibility message
+                rothEligibilityMessage = income > CONTRIBUTION_LIMITS_2025.rothPhaseOutEnd ? 'Not eligible' : 'Phase-out';
+            }
+
+            // Update UI with eligibility status
+            document.getElementById('rothEligibility').textContent = rothEligibilityMessage;
+
+            // If the original contribution was non-zero but got reduced to zero,
+            // We should still display that in the UI
+            if (originalRothContribution > 0 && finalRothContribution <= 0) {
+                document.getElementById('rothWarning').textContent = 'Phase-out reduced to $0';
+            }
+
+            // --- Enforce Combined IRA Limit (Traditional + Roth must be <= overall IRA limit) ---
+            const iraCombinedLimit = CONTRIBUTION_LIMITS_2025.ira;
+            let iraCombined = finalIraContribution + finalRothContribution;
+            if (iraCombined > iraCombinedLimit) {
+                const overAmount = iraCombined - iraCombinedLimit;
+                // Prefer to reduce Roth first
+                const reduceRoth = Math.min(overAmount, finalRothContribution);
+                if (reduceRoth > 0) {
+                    finalRothContribution -= reduceRoth;
+                    document.getElementById('rothWarning').textContent = (document.getElementById('rothWarning').textContent || '') + (document.getElementById('rothWarning').textContent ? ' ' : '') + 'Adjusted for combined IRA limit.';
+                }
+                const remainingOver = overAmount - reduceRoth;
+                if (remainingOver > 0) {
+                    finalIraContribution = Math.max(0, finalIraContribution - remainingOver);
+                    document.getElementById('iraWarning').textContent = (document.getElementById('iraWarning').textContent || '') + (document.getElementById('iraWarning').textContent ? ' ' : '') + 'Adjusted for combined IRA limit.';
+                }
+            }
+
+            // --- Backdoor Roth Contribution (subject to combined IRA limit after phase-out) ---
+            let finalBackdoorRothContribution = backdoorRothInput;
+            const remainingIraSpace = Math.max(0, CONTRIBUTION_LIMITS_2025.ira - (finalIraContribution + finalRothContribution));
+            if (finalBackdoorRothContribution > remainingIraSpace) {
+                finalBackdoorRothContribution = remainingIraSpace;
+                if (backdoorWarningEl) backdoorWarningEl.textContent = 'Over limit! Capped to remaining IRA limit.';
+            }
+
+            // --- Traditional IRA Deductibility ---
+            let deductibleIraAmount = finalIraContribution;
+            let iraDeductibilityMessage = 'Fully Deductible';
+            const tradPhaseOutStart = CONTRIBUTION_LIMITS_2025.tradIraDeductibilityPhaseOutStart;
+            const tradPhaseOutEnd = CONTRIBUTION_LIMITS_2025.tradIraDeductibilityPhaseOutEnd;
+
+            if (income > tradPhaseOutStart) {
+                if (income >= tradPhaseOutEnd) {
+                    deductibleIraAmount = 0;
+                    iraDeductibilityMessage = 'Not Deductible';
+                } else {
+                    const phaseOutRange = tradPhaseOutEnd - tradPhaseOutStart;
+                    const amountIntoPhaseout = income - tradPhaseOutStart;
+                    const reductionFactor = amountIntoPhaseout / phaseOutRange;
+                    const maxDeductible = CONTRIBUTION_LIMITS_2025.ira * (1 - reductionFactor);
+                    deductibleIraAmount = Math.min(finalIraContribution, maxDeductible);
+                    iraDeductibilityMessage = 'Partial (Phase-out)';
+                }
+            }
+            if (finalIraContribution > 0 && deductibleIraAmount <= 0) {
+                iraDeductibilityMessage = 'Not Deductible';
+                deductibleIraAmount = 0;
+            }
+            document.getElementById('iraDeductibility').textContent = iraDeductibilityMessage;
+
+            // Backdoor Roth pro-rata rule note (simplified)
+            if (finalBackdoorRothContribution > 0 && deductibleIraAmount > 0 && backdoorWarningEl) {
+                backdoorWarningEl.textContent = (backdoorWarningEl.textContent ? backdoorWarningEl.textContent + ' ' : '') + 'Pro-rata may apply if pre-tax IRA exists (not modeled).';
+            }
+
+            // Calculate taxable income
+            const taxableIncome = income - finalT401kContribution - deductibleIraAmount;
+
+            // Calculate taxes
+            const federalTax = calculateProgressiveTax(taxableIncome, FEDERAL_TAX_BRACKETS_2024);
+            const stateTax = calculateProgressiveTax(taxableIncome, CA_TAX_BRACKETS_2024);
+            const socialSecurityTax = Math.min(income, SS_WAGE_BASE_2024) * 0.062;
+            const medicareTax = income * 0.0145;
+            const totalTax = federalTax + stateTax + socialSecurityTax + medicareTax;
+            const postTaxIncome = income - totalTax;
+
+            // Calculate effective tax rates to use for retirement tax assumption
+            const effectiveFederalRate = taxableIncome > 0 ? federalTax / taxableIncome : 0;
+            const effectiveStateRate = taxableIncome > 0 ? stateTax / taxableIncome : 0;
+
+            // Determine Capital Gains Rates
+            let federalCapitalGainsRate = 0;
+            if (taxableIncome > 518900) {
+                federalCapitalGainsRate = 0.20;
+            } else if (taxableIncome > 47025) {
+                federalCapitalGainsRate = 0.15;
+            }
+            const californiaCapitalGainsRate = effectiveStateRate; // CA taxes gains as income
+
+            // Update tax rate display
+            document.getElementById('federalTaxRate').textContent = `${(federalTax / income * 100).toFixed(2)}%`;
+            document.getElementById('stateTaxRate').textContent = `${(stateTax / income * 100).toFixed(2)}%`;
+            document.getElementById('retirementFederalTax').textContent = `${(effectiveFederalRate * 100).toFixed(2)}%`;
+            document.getElementById('retirementStateTax').textContent = `${(effectiveStateRate * 100).toFixed(2)}%`;
+            document.getElementById('capitalGainsFederal').textContent = `${(federalCapitalGainsRate * 100).toFixed(2)}%`;
+            document.getElementById('capitalGainsCA').textContent = `${(californiaCapitalGainsRate * 100).toFixed(2)}%`;
+
+            // Populate tax breakdown table
+            populateTaxBreakdown(federalTax, stateTax, socialSecurityTax, medicareTax, totalTax);
+
+            // Calculate total contributions and remaining income
+            const nonDeductibleIraAmount = finalIraContribution - deductibleIraAmount;
+            const postTaxContributions = finalRothContribution + finalBackdoorRothContribution + finalR401kContribution + nonDeductibleIraAmount;
+            const availableForTaxableInvestments = postTaxIncome - annualSpending - postTaxContributions;
+
+            document.getElementById('annualSavings').textContent = `$${(availableForTaxableInvestments / 12).toLocaleString('en-US', {maximumFractionDigits: 0})}`;
+
+            const investments = [];
+
+            if (deductibleIraAmount > 0) {
+                investments.push({ name: 'Traditional IRA (Deductible)', annualContribution: deductibleIraAmount, return: iraReturn, type: 'traditional' });
+            }
+            if (nonDeductibleIraAmount > 0) {
+                investments.push({ name: 'Traditional IRA (Non-Deductible)', annualContribution: nonDeductibleIraAmount, return: iraReturn, type: 'nondeductible_traditional' });
+            }
+
+            // Always add the Roth IRA to ensure UI updates when changing values
+            investments.push({ name: 'Roth IRA', annualContribution: finalRothContribution, return: rothReturn, type: 'roth' });
+
+            // Backdoor Roth IRA (treated like Roth for growth/tax purposes)
+            investments.push({ name: 'Backdoor Roth IRA', annualContribution: finalBackdoorRothContribution, return: rothReturn, type: 'roth' });
+
+            // Always add 401k accounts to ensure UI updates when changing values
+            investments.push({ name: 'Traditional 401k', annualContribution: finalT401kContribution, return: t401kReturn, type: 'traditional' });
+            investments.push({ name: 'Roth 401k', annualContribution: finalR401kContribution, return: r401kReturn, type: 'roth' });
+
+            // Employer Match for Traditional 401k (taxed at retirement, not employee-funded)
+            let employerMatchContribution = 0;
+            if (t401kMatchRate > 0 && t401kMatchCapPercent > 0 && finalT401kContribution > 0) {
+                const maxMatchableEmployeeContrib = income * (t401kMatchCapPercent / 100);
+                const matchableEmployeeContrib = Math.min(finalT401kContribution, maxMatchableEmployeeContrib);
+                employerMatchContribution = matchableEmployeeContrib * (t401kMatchRate / 100);
+            }
+            investments.push({ name: 'Employer Match (Trad. 401k)', annualContribution: employerMatchContribution, return: t401kReturn, type: 'employer_match_traditional' });
+
+             // Collect and process dynamic strategies based on proportion
+            const strategyElements = document.querySelectorAll('.investment-strategy');
+            let totalPercent = 0;
+            const strategies = Array.from(strategyElements).map(el => {
+                const name = el.querySelector('.strategy-name').value || 'Unnamed Strategy';
+                const percent = parseFloat(el.querySelector('.strategy-percent').value) || 0;
+                const expectedReturn = parseFloat(el.querySelector('.strategy-return').value) || 0;
+                const assetType = el.querySelector('.strategy-asset-type')?.value || 'income';
+                totalPercent += percent;
+                return { name, percent, expectedReturn, assetType };
+            });
+
+            const strategyWarning = document.getElementById('strategyWarning');
+            strategyWarning.textContent = ''; // Clear previous warning
+
+            let allocationFactor = 1.0;
+            if (totalPercent > 100) {
+                strategyWarning.textContent = 'Total exceeds 100%. Allocations scaled down.';
+                allocationFactor = 100 / totalPercent;
+            }
+
+            if (availableForTaxableInvestments > 0) {
+                let allocatedPercent = 0;
+                strategies.forEach(strategy => {
+                    if (strategy.percent > 0) {
+                        const actualPercent = strategy.percent * allocationFactor;
+                        allocatedPercent += actualPercent;
+                        const contribution = availableForTaxableInvestments * (actualPercent / 100);
+                        // Use the asset type stored in the strategy object
+                        const taxableType = strategy.assetType === 'stocks' ? 'taxable_cap_gains' : 'taxable_income';
+
+                        investments.push({
+                            name: strategy.name,
+                            annualContribution: contribution,
+                            return: strategy.expectedReturn,
+                            type: taxableType
+                        });
+                    }
+                });
+
+                const unallocatedPercent = 100 - allocatedPercent;
+                if (unallocatedPercent > 0.01) { // Use a small epsilon to handle floating point issues
+                    const unallocatedContribution = availableForTaxableInvestments * (unallocatedPercent / 100);
+                    investments.push({ name: 'Cash Savings (Unallocated)', annualContribution: unallocatedContribution, return: 0, type: 'cash' });
+                }
+            }
+
+
+            let totalAfterTaxValue = 0;
+            const resultsBody = document.getElementById('resultsBody');
+            resultsBody.innerHTML = '';
+
+            investments.forEach(investment => {
+                // Skip zero contributions but still show them with zero values in UI
+                if (investment.annualContribution <= 0) {
+                    // For zero contributions, still show the row but with zeros
+                    if (['roth', 'traditional', 'nondeductible_traditional'].includes(investment.type)) {
+                        // For retirement accounts, show them even at zero value
+                        // Create a table row with zeros
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td><strong>${investment.name}</strong></td>
+                            <td class="money">$0</td>
+                            <td><span style="color: #fbbf24;">Post-tax</span></td>
+                            <td class="money">$0</td>
+                            <td class="money">$0</td>
+                            <td class="money">$0</td>
+                            <td class="money">$0</td>
+                            <td class="money">$0</td>
+                        `;
+                        resultsBody.appendChild(row);
+                    }
+                    // Skip calculation for zero contributions
+                    return;
+                }
+
+                const futureValue = calculateFutureValue(investment.annualContribution, investment.return, years);
+                    const totalContributionAmount = investment.annualContribution * years;
+                    const monthlyContribution = investment.annualContribution / 12;
+
+                    let afterTaxValue = 0;
+                    let totalTaxDeducted = 0;
+                    let netGrowth = 0;
+                    let monthlyTaxImpact = '';
+
+                    if (investment.type === 'traditional') {
+                        const retirementTax = futureValue * (effectiveFederalRate + effectiveStateRate);
+                        totalTaxDeducted = retirementTax;
+                        afterTaxValue = futureValue - totalTaxDeducted;
+                        const taxSavingsNow = investment.annualContribution * (effectiveFederalRate + effectiveStateRate);
+                        monthlyTaxImpact = `<span style="color: #34d399;">+$${(taxSavingsNow / 12).toFixed(0)} saved</span>`;
+                    } else if (investment.type === 'nondeductible_traditional') {
+                        const gains = Math.max(0, futureValue - totalContributionAmount);
+                        totalTaxDeducted = gains * (effectiveFederalRate + effectiveStateRate); // Earnings taxed as income
+                        afterTaxValue = futureValue - totalTaxDeducted;
+                        monthlyTaxImpact = `<span style="color: #fbbf24;">Post-tax</span>`;
+                    } else if (investment.type === 'roth') {
+                        totalTaxDeducted = 0;
+                        afterTaxValue = futureValue;
+                        monthlyTaxImpact = `<span style="color: #fbbf24;">Post-tax</span>`;
+                    } else if (investment.type === 'taxable_cap_gains') {
+                        const capitalGains = Math.max(0, futureValue - totalContributionAmount);
+                        totalTaxDeducted = capitalGains * (federalCapitalGainsRate + californiaCapitalGainsRate);
+                        afterTaxValue = futureValue - totalTaxDeducted;
+                        monthlyTaxImpact = `<span style="color: #fbbf24;">Post-tax</span>`;
+                    } else if (investment.type === 'taxable_income') {
+                        const incomeGains = Math.max(0, futureValue - totalContributionAmount);
+                        totalTaxDeducted = incomeGains * (effectiveFederalRate + effectiveStateRate); // Taxed as income
+                        afterTaxValue = futureValue - totalTaxDeducted;
+                        monthlyTaxImpact = `<span style="color: #fbbf24;">Post-tax</span>`;
+                    } else if (investment.type === 'cash') {
+                        totalTaxDeducted = 0;
+                        afterTaxValue = futureValue;
+                        monthlyTaxImpact = `<span style="color: #fbbf24;">Post-tax</span>`;
+                    } else if (investment.type === 'employer_match_traditional') {
+                        const retirementTax = futureValue * (effectiveFederalRate + effectiveStateRate);
+                        totalTaxDeducted = retirementTax;
+                        afterTaxValue = futureValue - totalTaxDeducted;
+                        monthlyTaxImpact = `<span style="color: #34d399;">Employer contribution</span>`;
+                    }
+
+                // Cash has no growth, other investments have growth based on returns
+                netGrowth = investment.type === 'cash' ? 0 : afterTaxValue - totalContributionAmount;
+                    totalAfterTaxValue += afterTaxValue;
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${investment.name}</strong></td>
+                        <td class="money">$${monthlyContribution.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                        <td>${monthlyTaxImpact}</td>
+                        <td class="money">$${totalContributionAmount.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                        <td class="money">$${futureValue.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                        <td class="money ${totalTaxDeducted > 0 ? 'tax-negative' : ''}">
+                        ${totalTaxDeducted > 0 ? '-' : ''}$${Math.abs(totalTaxDeducted).toLocaleString('en-US', {maximumFractionDigits: 0})}
+                        </td>
+                        <td class="money">$${afterTaxValue.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                        <td class="money">$${netGrowth.toLocaleString('en-US', {maximumFractionDigits: 0})}</td>
+                    `;
+                    resultsBody.appendChild(row);
+            });
+
+            // Separate savings from investments for clarity in the summary
+            const cashInvestments = investments.filter(inv => inv.type === 'cash');
+            const totalSavingsValue = cashInvestments.reduce((total, inv) => {
+                return total + inv.annualContribution * years; // Cash has no growth
+            }, 0);
+            const totalInvestedValue = totalAfterTaxValue - totalSavingsValue;
+
+
+            // Update summary
+            document.getElementById('totalAmount').textContent = `$${totalAfterTaxValue.toLocaleString('en-US', {maximumFractionDigits: 0})}`;
+            document.getElementById('totalAmountText').innerHTML = `
+                <span style="font-size: 0.8em; font-weight: normal;">Your total net worth will be</span>
+                $${totalAfterTaxValue.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                <span style="font-size: 0.6em; font-weight: normal; display: block; margin-top: 5px;">
+                    (<strong>$${totalInvestedValue.toLocaleString('en-US', {maximumFractionDigits: 0})}</strong> from investments +
+                    <strong>$${totalSavingsValue.toLocaleString('en-US', {maximumFractionDigits: 0})}</strong> in cash savings)
+                </span>
+            `;
+            document.getElementById('yearsText').textContent = years;
+
+            // Monthly breakdown
+            const monthlyIncome = income / 12;
+            const monthlyTaxes = totalTax / 12;
+            const monthlyContributionsTotal = investments.reduce((sum, inv) => sum + (inv.type === 'employer_match_traditional' ? 0 : inv.annualContribution), 0) / 12;
+            const monthlyTakeHome = monthlyIncome - monthlyTaxes - monthlySpending - (finalRothContribution / 12) - (finalBackdoorRothContribution / 12) - (finalR401kContribution / 12);
+
+            const summaryElement = document.getElementById('summary');
+            const incomeSummaryDiv = document.getElementById('income-summary');
+            incomeSummaryDiv.innerHTML = `
+                <p style="margin: 0;">
+                    Annual Income After Tax: <strong>$${postTaxIncome.toLocaleString('en-US', {maximumFractionDigits: 0})}</strong><br>
+                    Annual Available After Spending: <strong>$${(postTaxIncome - annualSpending).toLocaleString('en-US', {maximumFractionDigits: 0})}</strong>
+                </p>
+                <p style="font-size: 0.9em; margin-top: 10px; opacity: 0.8;">
+                    💰 <strong>Monthly Breakdown:</strong><br>
+                    Gross: $${monthlyIncome.toLocaleString('en-US', {maximumFractionDigits: 0})} |
+                    Taxes: -$${monthlyTaxes.toLocaleString('en-US', {maximumFractionDigits: 0})} |
+                    Spending: -$${monthlySpending.toLocaleString('en-US', {maximumFractionDigits: 0})} |
+                    Contributions: -$${monthlyContributionsTotal.toLocaleString('en-US', {maximumFractionDigits: 0})}
+                </p>
+            `;
+
+            // Show results
+            const resultsSection = document.getElementById('results');
+            resultsSection.style.display = 'block';
+            setTimeout(() => resultsSection.classList.add('show'), 50);
+        }
+
+        function populateTaxBreakdown(federal, state, ss, medicare, total) {
+            const tbody = document.getElementById('tax-breakdown-body');
+            tbody.innerHTML = `
+                <tr><td>Federal Tax</td><td>$${federal.toLocaleString('en-US', {maximumFractionDigits: 0})}</td><td>$${(federal/12).toLocaleString('en-US', {maximumFractionDigits: 0})}</td></tr>
+                <tr><td>CA State Tax</td><td>$${state.toLocaleString('en-US', {maximumFractionDigits: 0})}</td><td>$${(state/12).toLocaleString('en-US', {maximumFractionDigits: 0})}</td></tr>
+                <tr><td>Social Security</td><td>$${ss.toLocaleString('en-US', {maximumFractionDigits: 0})}</td><td>$${(ss/12).toLocaleString('en-US', {maximumFractionDigits: 0})}</td></tr>
+                <tr><td>Medicare</td><td>$${medicare.toLocaleString('en-US', {maximumFractionDigits: 0})}</td><td>$${(medicare/12).toLocaleString('en-US', {maximumFractionDigits: 0})}</td></tr>
+                <tr style="font-weight: bold; background: rgba(51, 65, 85, 0.5);"><td>Total Tax</td><td>$${total.toLocaleString('en-US', {maximumFractionDigits: 0})}</td><td>$${(total/12).toLocaleString('en-US', {maximumFractionDigits: 0})}</td></tr>
+            `;
+        }
+
+        function addInvestmentStrategy() {
+            const container = document.getElementById('investment-strategies');
+            const strategyCount = container.children.length;
+            const newStrategy = document.createElement('div');
+            newStrategy.className = 'investment-strategy';
+            newStrategy.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <input type="text" class="strategy-name" placeholder="Strategy Name (e.g., ETFs)">
+                    <button onclick="this.parentElement.parentElement.remove(); triggerCalculation();" style="background: #ef4444; border: none; color: white; border-radius: 5px; padding: 3px 8px; cursor: pointer;">X</button>
+                </div>
+                <label>Asset Type:</label>
+                <select class="strategy-asset-type" style="width: 100%; padding: 12px; border: 2px solid #475569; border-radius: 8px; font-size: 16px; margin-bottom: 15px; box-sizing: border-box; background: rgba(30, 41, 59, 0.8); color: #f1f5f9;">
+                    <option value="stocks">Stocks/ETFs (Capital Gains)</option>
+                    <option value="income">Bonds/HYSA (Ordinary Income)</option>
+                </select>
+                <label>Contribution (% of available savings):</label>
+                <input type="number" class="strategy-percent" value="0" step="1">
+                <label>Expected Annual Return (%):</label>
+                <input type="number" class="strategy-return" value="8" step="0.1">
+            `;
+            container.appendChild(newStrategy);
+            // Re-hook listeners
+            newStrategy.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', triggerCalculation);
+                input.addEventListener('change', triggerCalculation);
+            });
+        }
+
+        // Real-time calculation setup
+        let calculationTimeout;
+        function triggerCalculation() {
+            clearTimeout(calculationTimeout);
+            calculationTimeout = setTimeout(() => {
+                const income = parseFloat(document.getElementById('income').value) || 0;
+                const years = parseInt(document.getElementById('years').value) || 0;
+                if (income > 0 && years > 0) {
+                    calculateInvestments();
+                }
+            }, 300);
+        }
+
+        // Auto-calculate on any input change
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('input', triggerCalculation);
+            input.addEventListener('change', triggerCalculation);
+        });
+
+        document.getElementById('add-strategy').addEventListener('click', addInvestmentStrategy);
+        document.getElementById('fill-max-match').addEventListener('click', function() {
+            const capPercentEl = document.getElementById('t401kMatchCapPercent');
+            const percentEl = document.getElementById('t401kPercent');
+            if (!capPercentEl || !percentEl) return;
+            const capPercent = parseFloat(capPercentEl.value) || 0;
+            // Fill employee contribution to at least the cap percent (without exceeding 100)
+            percentEl.value = Math.min(100, Math.max(parseFloat(percentEl.value) || 0, capPercent)).toString();
+            triggerCalculation();
+        });
+
+        document.getElementById('toggle-tax-breakdown').addEventListener('click', function(e) {
+            e.preventDefault();
+            const breakdown = document.getElementById('tax-breakdown');
+            if (breakdown.style.display === 'none') {
+                breakdown.style.display = 'block';
+                this.textContent = 'Hide Breakdown';
+            } else {
+                breakdown.style.display = 'none';
+                this.textContent = 'Show Breakdown';
+            }
+        });
+
+        document.getElementById('export-xlsx').addEventListener('click', generateXLSX);
+
+        function generateXLSX() {
+            // --- 1. GATHER INPUTS ---
+            const income = parseFloat(document.getElementById('income').value) || 0;
+            const years = parseInt(document.getElementById('years').value) || 0;
+            const monthlySpending = parseFloat(document.getElementById('monthlySpending').value) || 0;
+            const iraContribution = parseFloat(document.getElementById('iraContribution').value) || 0;
+            const iraReturn = (parseFloat(document.getElementById('iraReturn').value) || 0) / 100;
+            const rothContribution = parseFloat(document.getElementById('rothContribution').value) || 0;
+            const rothReturn = (parseFloat(document.getElementById('rothReturn').value) || 0) / 100;
+            const t401kPercent = (parseFloat(document.getElementById('t401kPercent').value) || 0) / 100;
+            const t401kReturn = (parseFloat(document.getElementById('t401kReturn').value) || 0) / 100;
+            const r401kPercent = (parseFloat(document.getElementById('r401kPercent').value) || 0) / 100;
+            const r401kReturn = (parseFloat(document.getElementById('r401kReturn').value) || 0) / 100;
+
+            // --- 2. SETUP WORKSHEET DATA ---
+            const ws_data = [
+                ["Category", "Value", "Notes", "Formula Section"],
+                ["Inputs"],
+                ["Annual Income", income],
+                ["Monthly Spending", monthlySpending],
+                ["Number of Years", years],
+                [],
+                ["Retirement Contributions (Annual)"],
+                ["Traditional IRA", iraContribution],
+                ["Roth IRA", rothContribution],
+                ["Traditional 401k (% of Income)", t401kPercent, "Enter as decimal, e.g., 0.10 for 10%"],
+                ["Roth 401k (% of Income)", r401kPercent, "Enter as decimal, e.g., 0.05 for 5%"],
+                [],
+                ["Expected Annual Returns"],
+                ["Traditional IRA", iraReturn, "Enter as decimal, e.g., 0.07 for 7%"],
+                ["Roth IRA", rothReturn, "Enter as decimal, e.g., 0.07 for 7%"],
+                ["Traditional 401k", t401kReturn, "Enter as decimal, e.g., 0.07 for 7%"],
+                ["Roth 401k", r401kReturn, "Enter as decimal, e.g., 0.07 for 7%"],
+                [],
+                ["Calculations"], // B20
+                ["Annual Spending", null, null, {t:'n', f:"B4*12"}],
+                ["Desired Trad. 401k Contrib.", null, null, {t:'n', f:"B3*B10"}],
+                ["Desired Roth 401k Contrib.", null, null, {t:'n', f:"B3*B11"}],
+                [],
+                ["Contribution Limits (2024)"], // B25
+                ["IRA Limit", 7000],
+                ["401k Limit", 23000],
+                ["SS Wage Base", 168600],
+                ["Roth Phase-Out Start", 146000],
+                ["Roth Phase-Out End", 161000],
+                [],
+                ["Validated Contributions"], // B32
+                ["Final Trad. IRA", null, "Cannot exceed limit", {t:'n', f:"MIN(B8, B26)"}],
+                ["Final Roth IRA (Pre-Phaseout)", null, "Cannot exceed limit", {t:'n', f:"MIN(B9, B26)"}],
+                ["Combined 401k Total", null, null, {t:'n', f:"B22+B23"}],
+                ["401k Scaling Factor", null, "Scales down if over limit", {t:'n', f:"IF(B35>B27, B27/B35, 1)"}],
+                ["Final Trad. 401k", null, null, {t:'n', f:"B22*B36"}],
+                ["Final Roth 401k", null, null, {t:'n', f:"B23*B36"}],
+                ["Final Roth IRA (Post-Phaseout)", null, "Reduced based on income", {t:'n', f:"B34 * (1 - MIN(1, MAX(0, (B3-B29)/(B30-B29))))"}],
+                [],
+                ["Tax Calculation"], // B41
+                ["Pre-tax Deductions", null, "Trad. IRA + Trad. 401k", {t:'n', f:"B33+B37"}],
+                ["Taxable Income", null, "Income after deductions", {t:'n', f:"B3-B42"}],
+                ["Federal Tax", null, "Progressive calculation", {t:'n', f:"SUM(MAX(0,B43-0)*0.1, MAX(0,B43-11600)*0.02, MAX(0,B43-47150)*0.1, MAX(0,B43-100525)*0.02, MAX(0,B43-191950)*0.08, MAX(0,B43-243725)*0.03, MAX(0,B43-609350)*0.02)"}],
+                ["CA State Tax", null, "Progressive calculation", {t:'n', f:"SUM(MAX(0,B43-0)*0.01, MAX(0,B43-10412)*0.01, MAX(0,B43-24684)*0.02, MAX(0,B43-38959)*0.02, MAX(0,B43-54081)*0.02, MAX(0,B43-68350)*0.013, MAX(0,B43-349137)*0.01, MAX(0,B43-418961)*0.01, MAX(0,B43-698271)*0.01)"}],
+                ["Social Security Tax", null, null, {t:'n', f:"MIN(B3, B28)*0.062"}],
+                ["Medicare Tax", null, null, {t:'n', f:"B3*0.0145"}],
+                ["Total Tax", null, null, {t:'n', f:"SUM(B44:B47)"}],
+                ["Post-Tax Income", null, null, {t:'n', f:"B3-B48"}],
+                [],
+                ["Investment Projections"], // B51
+                ["Effective Federal Rate", null, null, {t:'n', f:"IFERROR(B44/B43, 0)"}],
+                ["Effective State Rate", null, null, {t:'n', f:"IFERROR(B45/B43, 0)"}],
+                ["Federal Capital Gains Rate", null, "0%, 15%, or 20% based on taxable income", {t:'n', f:"IF(B43>518900, 0.2, IF(B43>47025, 0.15, 0))"}],
+                ["CA Capital Gains Rate", null, "Same as effective state rate", {t:'n', f:"B53"}],
+                ["Available for Taxable Inv.", null, null, {t:'n', f:"B49-B21-(B38+B39)"}],
+                ["Trad. IRA Future Value", null, "FV(rate, nper, pmt, [pv], [type])", {t:'n', f:"-FV(B14/12, B5*12, B33/12, 0, 0)"}],
+                ["Roth IRA Future Value", null, null, {t:'n', f:"-FV(B15/12, B5*12, B39/12, 0, 0)"}],
+                ["Trad. 401k Future Value", null, null, {t:'n', f:"-FV(B16/12, B5*12, B37/12, 0, 0)"}],
+                ["Roth 401k Future Value", null, null, {t:'n', f:"-FV(B17/12, B5*12, B38/12, 0, 0)"}],
+                ["Taxable Investments Future Value", "Assuming 100% allocation to 'Cash Savings' at 0%", null, {t:'n', f:"-FV(0, B5*12, B56/12, 0, 0)"}],
+                [],
+                ["Final After-Tax Values"], // B63
+                ["Trad. IRA (After Tax)", null, "Taxed at retirement", {t:'n', f:"B57*(1-(B52+B53))"}],
+                ["Roth IRA (After Tax)", null, "Not taxed at retirement", {t:'n', f:"B58"}],
+                ["Trad. 401k (After Tax)", null, "Taxed at retirement", {t:'n', f:"B59*(1-(B52+B53))"}],
+                ["Roth 401k (After Tax)", null, "Not taxed at retirement", {t:'n', f:"B60"}],
+                ["Taxable (After Tax)", null, "Capital gains tax on growth", {t:'n', f:"B61 - MAX(0, B61-(B56*B5)) * (B54+B55)" }],
+                [],
+                ["SUMMARY"], // B70
+                ["Total Net Worth (After Tax)", null, null, {t:'n', f:"SUM(B64:B68)"}],
+                ["From Investments", null, null, {t:'n', f:"SUM(B64:B67)"}],
+                ["From Cash Savings", null, null, {t:'n', f:"B68"}],
+            ];
+
+            // --- 3. CREATE WORKSHEET AND WORKBOOK ---
+            const ws = XLSX.utils.aoa_to_sheet(ws_data);
+
+            // Apply formulas by iterating through the data array
+            for (let R = 0; R < ws_data.length; ++R) {
+                const row = ws_data[R];
+                const cell_ref = XLSX.utils.encode_cell({c:3, r:R}); // Column D
+                if (row[3]) {
+                     XLSX.utils.sheet_add_aoa(ws, [[row[3]]], { origin: cell_ref });
+                }
+            }
+
+            // Adjust column widths
+            ws['!cols'] = [{wch:30}, {wch:15}, {wch:35}, {wch:60}];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Retirement_Calculator");
+
+            // --- 4. TRIGGER DOWNLOAD ---
+            XLSX.writeFile(wb, "Retirement_Calculator.xlsx");
+        }
+
+
+        // Initial calculation on page load
+        window.addEventListener('load', () => {
+            addInvestmentStrategy(); // Add the first default strategy
+            const firstStrategyCard = document.querySelector('.investment-strategy');
+            if (firstStrategyCard) {
+                firstStrategyCard.querySelector('.strategy-name').value = "Cash Savings";
+                firstStrategyCard.querySelector('.strategy-percent').value = "100";
+                firstStrategyCard.querySelector('.strategy-return').value = "0";
+                firstStrategyCard.querySelector('.strategy-asset-type').value = "income";
+            }
+            triggerCalculation();
+        });
+
+        // Allow Enter key to immediately calculate
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                clearTimeout(calculationTimeout);
+                calculateInvestments();
+            }
+        });
+
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</body>
+</html>
