@@ -724,7 +724,7 @@
             // Calculate total contributions and remaining income
             const nonDeductibleIraAmount = finalIraContribution - deductibleIraAmount;
             const postTaxContributions = finalRothContribution + finalBackdoorRothContribution + finalR401kContribution + nonDeductibleIraAmount;
-            const availableForTaxableInvestments = postTaxIncome - annualSpending - postTaxContributions;
+            const availableForTaxableInvestments = postTaxIncome - annualSpending - postTaxContributions - finalT401kContribution;
 
             document.getElementById('annualSavings').textContent = `$${(availableForTaxableInvestments / 12).toLocaleString('en-US', {maximumFractionDigits: 0})}`;
 
