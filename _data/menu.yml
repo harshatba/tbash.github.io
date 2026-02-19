@@ -1,4 +1,6 @@
 entries:
+  - title: Sudoku
+    url: /tools/sudoku.html
   - title: 💰 Retirement Calculator
     url: /tools/retirement-calculator.html
   - title: Writing number 1
