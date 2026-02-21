@@ -8,9 +8,10 @@ layout: default
     {% if page.date %}
       <time datetime="{{ page.date | date_to_xmlschema }}">{{ page.date | date: site.theme_config.date_format | default: "%Y-%m-%d" }}</time>
     {% endif %}
+    <hr class="divider">
   </header>
 
   {{ content }}
 </article>
 
-<a href="{{ "/" | relative_url }}">{{ site.theme_config.back_home_text | default: "← back" }}</a>
+<a class="back-link" href="{{ "/" | relative_url }}">{{ site.theme_config.back_home_text | default: "← back" }}</a>
