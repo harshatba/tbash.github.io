@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Wordscapes - tbash.xyz</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            min-height: 100dvh;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 16px 12px;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        header { text-align: center; margin-bottom: 8px; }
+
+        header h1 {
+            font-size: 1.7rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            letter-spacing: 2px;
+        }
+
+        header .subtitle { font-size: 0.8rem; color: #94a3b8; margin-top: 2px; }
+        header .subtitle a { color: #60a5fa; text-decoration: none; }
+
+        .top-bar {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        .top-bar .level-label { font-weight: 600; color: #f1f5f9; }
+        .coins { color: #fbbf24; font-weight: 600; }
+
+        .btn {
+            padding: 6px 12px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(30, 41, 59, 0.8);
+            color: #cbd5e1;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+
+        .btn:hover { background: rgba(59, 130, 246, 0.3); border-color: #3b82f6; color: #f1f5f9; }
+        .btn:disabled { opacity: 0.4; cursor: default; }
+
+        .grid-wrap {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 4px;
+        }
+
+        #grid {
+            display: grid;
+            gap: 4px;
+        }
+
+        .cell {
+            width: var(--cell);
+            height: var(--cell);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: calc(var(--cell) * 0.55);
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: transparent;
+            transition: background 0.3s, color 0.3s, transform 0.2s;
+        }
+
+        .cell.empty { background: transparent; border: none; }
+
+        .cell.revealed {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #fff;
+            animation: pop 0.3s ease;
+        }
+
+        .cell.hinted {
+            background: #8b5cf6;
+            border-color: #8b5cf6;
+            color: #fff;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0.6); }
+            60% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+
+        .current-word {
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            margin: 6px 0;
+        }
+
+        .current-word .cw-letter {
+            background: #3b82f6;
+            color: #fff;
+            font-weight: 700;
+            font-size: 1.1rem;
+            width: 32px;
+            height: 36px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .current-word.shake { animation: shake 0.4s ease; }
+        .current-word.good .cw-letter { background: #22c55e; }
+        .current-word.bonus .cw-letter { background: #fbbf24; color: #1a1a2e; }
+        .current-word.dup .cw-letter { background: #64748b; }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-5px); }
+            80% { transform: translateX(5px); }
+        }
+
+        .toast {
+            position: fixed;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            color: #f1f5f9;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 50;
+        }
+
+        .toast.show { opacity: 1; }
+
+        .wheel-wrap {
+            position: relative;
+            width: 240px;
+            height: 240px;
+            margin-top: 4px;
+            touch-action: none;
+        }
+
+        .wheel-bg {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        #lines { position: absolute; inset: 0; pointer-events: none; }
+
+        .wheel-letter {
+            position: absolute;
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            background: #f1f5f9;
+            color: #1a1a2e;
+            font-weight: 700;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+            touch-action: none;
+        }
+
+        .wheel-letter.selected { background: #3b82f6; color: #fff; }
+
+        #shuffle {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(15, 23, 42, 0.8);
+            color: #94a3b8;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        #shuffle:hover { color: #f1f5f9; border-color: #3b82f6; }
+
+        .bottom-info {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #94a3b8;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 12, 25, 0.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .overlay.show { opacity: 1; pointer-events: auto; }
+
+        .overlay-card {
+            background: #16213e;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 16px;
+            padding: 32px 40px;
+            text-align: center;
+            max-width: 320px;
+        }
+
+        .overlay-card h2 { color: #f1f5f9; margin-bottom: 8px; font-size: 1.4rem; }
+        .overlay-card p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 20px; }
+
+        .overlay-card .big-btn {
+            padding: 12px 28px;
+            background: #3b82f6;
+            border: none;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        .overlay-card .big-btn:hover { background: #2563eb; }
+
+        @media (max-width: 420px) {
+            .wheel-wrap { width: 210px; height: 210px; }
+            .wheel-letter { width: 46px; height: 46px; font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>WORDSCAPES</h1>
+        <div class="subtitle"><a href="/">cd ..</a> · swipe letters to build words</div>
+    </header>
+
+    <div class="top-bar">
+        <span class="level-label" id="levelLabel">Level 1</span>
+        <span class="coins">🪙 <span id="coins">0</span></span>
+        <button class="btn" id="hintBtn" title="Reveal a letter (10 coins)">💡 Hint (10)</button>
+    </div>
+
+    <div class="grid-wrap"><div id="grid"></div></div>
+
+    <div class="current-word" id="currentWord"></div>
+
+    <div class="wheel-wrap" id="wheelWrap">
+        <div class="wheel-bg"></div>
+        <svg id="lines" width="100%" height="100%"></svg>
+        <button id="shuffle" title="Shuffle letters">⟳</button>
+    </div>
+
+    <div class="bottom-info" id="progressInfo"></div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="overlay" id="overlay">
+        <div class="overlay-card">
+            <h2 id="overlayTitle">Level Complete!</h2>
+            <p id="overlayText"></p>
+            <button class="big-btn" id="overlayBtn">Next Level</button>
+        </div>
+    </div>
+
+    <script>
+    const LEVELS = [{"letters":"CAT","rows":3,"cols":3,"words":[{"w":"ACT","r":1,"c":0,"d":"h"},{"w":"CAT","r":0,"c":0,"d":"v"},{"w":"AT","r":0,"c":2,"d":"v"}],"bonus":["TA"]},{"letters":"ATE","rows":4,"cols":3,"words":[{"w":"EAT","r":0,"c":0,"d":"h"},{"w":"ATE","r":0,"c":1,"d":"v"},{"w":"TEA","r":2,"c":0,"d":"h"},{"w":"AT","r":2,"c":2,"d":"v"}],"bonus":["ETA","TA"]},{"letters":"NOW","rows":4,"cols":4,"words":[{"w":"WON","r":3,"c":1,"d":"h"},{"w":"OWN","r":1,"c":3,"d":"v"},{"w":"NOW","r":1,"c":1,"d":"v"},{"w":"ON","r":1,"c":0,"d":"h"},{"w":"NO","r":0,"c":0,"d":"v"}],"bonus":["OW"]},{"letters":"TOP","rows":4,"cols":3,"words":[{"w":"OPT","r":1,"c":0,"d":"h"},{"w":"POT","r":0,"c":0,"d":"v"},{"w":"TOP","r":1,"c":2,"d":"v"}],"bonus":["OP","TO"]},{"letters":"SAND","rows":6,"cols":4,"words":[{"w":"SAND","r":1,"c":0,"d":"h"},{"w":"ADS","r":1,"c":1,"d":"v"},{"w":"SAD","r":3,"c":1,"d":"h"},{"w":"AND","r":3,"c":2,"d":"v"},{"w":"AS","r":0,"c":0,"d":"v"},{"w":"AN","r":0,"c":2,"d":"v"}],"bonus":["DNA"]},{"letters":"GOLD","rows":6,"cols":5,"words":[{"w":"GOLD","r":2,"c":0,"d":"h"},{"w":"LOG","r":2,"c":2,"d":"v"},{"w":"OLD","r":0,"c":3,"d":"v"},{"w":"DOG","r":0,"c":0,"d":"v"},{"w":"GOD","r":4,"c":2,"d":"h"},{"w":"GO","r":0,"c":2,"d":"h"},{"w":"DO","r":4,"c":4,"d":"v"}],"bonus":["LO"]},{"letters":"STAR","rows":6,"cols":7,"words":[{"w":"ARTS","r":3,"c":2,"d":"h"},{"w":"RATS","r":2,"c":2,"d":"v"},{"w":"STAR","r":2,"c":4,"d":"v"},{"w":"TAR","r":2,"c":0,"d":"h"},{"w":"ART","r":4,"c":0,"d":"h"},{"w":"RAT","r":5,"c":4,"d":"h"},{"w":"SAT","r":0,"c":0,"d":"v"}],"bonus":["AS","AT","TA","TARS","TSAR"]},{"letters":"TIME","rows":6,"cols":4,"words":[{"w":"EMIT","r":3,"c":0,"d":"h"},{"w":"MITE","r":2,"c":2,"d":"v"},{"w":"ITEM","r":5,"c":0,"d":"h"},{"w":"TIME","r":0,"c":0,"d":"v"},{"w":"TIE","r":0,"c":0,"d":"h"}],"bonus":["EM","IT","ME","MET"]},{"letters":"LAKE","rows":5,"cols":7,"words":[{"w":"LEAK","r":1,"c":2,"d":"h"},{"w":"KALE","r":0,"c":4,"d":"v"},{"w":"LAKE","r":1,"c":2,"d":"v"},{"w":"ALE","r":4,"c":0,"d":"h"},{"w":"ELK","r":3,"c":4,"d":"h"}],"bonus":["KEA","LA","LEA"]},{"letters":"RAIN","rows":4,"cols":4,"words":[{"w":"RAIN","r":2,"c":0,"d":"h"},{"w":"AIR","r":0,"c":0,"d":"v"},{"w":"RAN","r":0,"c":3,"d":"v"},{"w":"AN","r":0,"c":0,"d":"h"},{"w":"IN","r":2,"c":2,"d":"v"}],"bonus":["RANI","RIA"]},{"letters":"WORD","rows":3,"cols":5,"words":[{"w":"WORD","r":2,"c":1,"d":"h"},{"w":"ROD","r":0,"c":4,"d":"v"},{"w":"ROW","r":0,"c":1,"d":"v"},{"w":"OR","r":0,"c":3,"d":"h"},{"w":"DO","r":1,"c":0,"d":"h"}],"bonus":["OW"]},{"letters":"HEART","rows":7,"cols":10,"words":[{"w":"EARTH","r":1,"c":2,"d":"h"},{"w":"HEART","r":1,"c":6,"d":"v"},{"w":"HATE","r":0,"c":3,"d":"v"},{"w":"TEAR","r":5,"c":6,"d":"h"},{"w":"HEAT","r":3,"c":8,"d":"v"},{"w":"RATE","r":3,"c":0,"d":"h"},{"w":"HEAR","r":0,"c":0,"d":"v"},{"w":"ART","r":3,"c":1,"d":"v"}],"bonus":["ATE","EAR","EAT","ERA","HARE","HAT","HATER","HER","RAT","RHEA","TAR","TARE","TEA","THE"]},{"letters":"STONE","rows":7,"cols":10,"words":[{"w":"NOTES","r":1,"c":5,"d":"h"},{"w":"STONE","r":0,"c":7,"d":"v"},{"w":"NOTE","r":1,"c":5,"d":"v"},{"w":"SENT","r":1,"c":9,"d":"v"},{"w":"TONE","r":4,"c":2,"d":"h"},{"w":"NEST","r":1,"c":2,"d":"v"},{"w":"TOES","r":2,"c":0,"d":"h"},{"w":"ONE","r":4,"c":3,"d":"v"},{"w":"TEN","r":3,"c":5,"d":"h"},{"w":"NOT","r":0,"c":0,"d":"v"}],"bonus":["EONS","NET","NETS","NO","ON","ONES","ONSET","SET","SO","SON","TENS","TO","TOE","TON","TONES"]},{"letters":"PLANE","rows":9,"cols":8,"words":[{"w":"PANEL","r":4,"c":0,"d":"h"},{"w":"PLANE","r":0,"c":3,"d":"v"},{"w":"LANE","r":2,"c":2,"d":"h"},{"w":"PALE","r":0,"c":3,"d":"h"},{"w":"PLAN","r":4,"c":0,"d":"v"},{"w":"LEAP","r":4,"c":4,"d":"v"},{"w":"PLEA","r":7,"c":4,"d":"h"},{"w":"PEN","r":6,"c":6,"d":"v"},{"w":"NAP","r":4,"c":2,"d":"v"}],"bonus":["ALE","AN","APE","LAP","NAPE","NEAP","PAL","PAN","PANE","PEAL"]},{"letters":"BREAD","rows":10,"cols":10,"words":[{"w":"BEARD","r":3,"c":3,"d":"h"},{"w":"BREAD","r":3,"c":3,"d":"v"},{"w":"BEAD","r":5,"c":2,"d":"h"},{"w":"BARE","r":1,"c":6,"d":"v"},{"w":"READ","r":7,"c":0,"d":"h"},{"w":"DEAR","r":4,"c":0,"d":"v"},{"w":"BEAR","r":1,"c":6,"d":"h"},{"w":"BAD","r":0,"c":8,"d":"v"},{"w":"EAR","r":7,"c":1,"d":"v"},{"w":"RED","r":9,"c":1,"d":"h"}],"bonus":["AD","ARE","BAR","BARD","BARED","BED","BRA","BRAD","BRED","DAB","DARE","DEBAR","DRAB","ERA"]},{"letters":"CLOUD","rows":7,"cols":7,"words":[{"w":"CLOUD","r":4,"c":2,"d":"h"},{"w":"CLOD","r":3,"c":3,"d":"v"},{"w":"COLD","r":6,"c":0,"d":"h"},{"w":"LOUD","r":2,"c":5,"d":"v"},{"w":"OLD","r":2,"c":4,"d":"h"},{"w":"DUO","r":0,"c":4,"d":"v"}],"bonus":["COL","CUD","DO","DOC","LO"]},{"letters":"SMILE","rows":7,"cols":10,"words":[{"w":"SLIME","r":5,"c":0,"d":"h"},{"w":"MILES","r":2,"c":4,"d":"v"},{"w":"SMILE","r":2,"c":1,"d":"v"},{"w":"MILE","r":3,"c":3,"d":"h"},{"w":"ISLE","r":0,"c":6,"d":"v"},{"w":"LIME","r":0,"c":5,"d":"h"},{"w":"LIES","r":2,"c":6,"d":"h"},{"w":"ELM","r":2,"c":8,"d":"v"}],"bonus":["ELMS","IS","LEIS","LIE","LIMES","ME","SEMI"]},{"letters":"TRAIN","rows":7,"cols":10,"words":[{"w":"TRAIN","r":5,"c":1,"d":"h"},{"w":"RAIN","r":2,"c":5,"d":"v"},{"w":"ANTI","r":3,"c":1,"d":"v"},{"w":"RANT","r":3,"c":0,"d":"h"},{"w":"RAT","r":1,"c":3,"d":"v"},{"w":"RAN","r":2,"c":5,"d":"h"},{"w":"ART","r":1,"c":2,"d":"h"},{"w":"TIN","r":0,"c":7,"d":"v"},{"w":"TAN","r":0,"c":7,"d":"h"},{"w":"AIR","r":1,"c":0,"d":"v"}],"bonus":["AN","ANT","AT","IN","IT","NIT","TAR","TARN"]},{"letters":"LIGHT","rows":5,"cols":8,"words":[{"w":"LIGHT","r":2,"c":2,"d":"h"},{"w":"HILT","r":1,"c":3,"d":"v"},{"w":"GILT","r":4,"c":0,"d":"h"},{"w":"HIT","r":2,"c":5,"d":"v"},{"w":"LIT","r":0,"c":6,"d":"v"},{"w":"IT","r":1,"c":6,"d":"h"}],"bonus":["HI"]},{"letters":"GARDEN","rows":11,"cols":11,"words":[{"w":"DANGER","r":5,"c":3,"d":"h"},{"w":"GARDEN","r":0,"c":5,"d":"v"},{"w":"GRAND","r":1,"c":3,"d":"v"},{"w":"ANGER","r":1,"c":8,"d":"v"},{"w":"GRADE","r":5,"c":6,"d":"v"},{"w":"RANGE","r":7,"c":5,"d":"h"},{"w":"RAGE","r":9,"c":3,"d":"h"},{"w":"GEAR","r":1,"c":3,"d":"h"},{"w":"READ","r":6,"c":9,"d":"v"},{"w":"AGED","r":3,"c":7,"d":"h"},{"w":"NEAR","r":2,"c":0,"d":"h"},{"w":"DEAR","r":1,"c":1,"d":"v"},{"w":"EARN","r":7,"c":3,"d":"v"}],"bonus":["AGE","DARE","DARN","DEN","DRAG","EAR","EGAD","END","ERA","GAD","GANDER","GRAD","GRAN","NAG","NERD","RAG","RAN","RAND","RANGED","RED","REND"]},{"letters":"MASTER","rows":10,"cols":11,"words":[{"w":"STREAM","r":9,"c":5,"d":"h"},{"w":"MASTER","r":4,"c":7,"d":"v"},{"w":"STEAM","r":7,"c":6,"d":"h"},{"w":"TERMS","r":4,"c":4,"d":"h"},{"w":"STARE","r":3,"c":4,"d":"v"},{"w":"SMART","r":6,"c":1,"d":"h"},{"w":"MEATS","r":3,"c":0,"d":"h"},{"w":"RATES","r":0,"c":1,"d":"v"},{"w":"TEARS","r":0,"c":8,"d":"v"},{"w":"MAST","r":0,"c":3,"d":"v"},{"w":"EAST","r":2,"c":7,"d":"h"},{"w":"TEAM","r":2,"c":10,"d":"v"},{"w":"STAR","r":0,"c":7,"d":"h"}],"bonus":["ARM","ARMS","ART","ARTS","ASTER","ATE","EAT","EATS","MARES","MARS","MARTS","MASER","MAT","MATE","MATES","MEAT","MESA","MET","RAM","RAMS","RAT","RATE","RATS","REST","SAME","SAT","SEA","SEAM","SEAT","SET","SMEAR","TAM","TAME","TAMER","TAMERS","TAMES","TAR","TARES","TARS","TASER","TEA","TEAMS","TEAR","TERM","TRAMS"]},{"letters":"ORANGE","rows":9,"cols":11,"words":[{"w":"ORANGE","r":4,"c":5,"d":"h"},{"w":"RANGE","r":1,"c":9,"d":"v"},{"w":"GROAN","r":2,"c":6,"d":"h"},{"w":"ANGER","r":0,"c":6,"d":"v"},{"w":"ORGAN","r":0,"c":3,"d":"h"},{"w":"RAGE","r":0,"c":4,"d":"v"},{"w":"GONE","r":3,"c":1,"d":"h"},{"w":"GEAR","r":3,"c":1,"d":"v"},{"w":"EARN","r":5,"c":0,"d":"h"},{"w":"NEAR","r":5,"c":3,"d":"v"},{"w":"EGO","r":1,"c":2,"d":"v"},{"w":"AGE","r":4,"c":7,"d":"v"}],"bonus":["AEON","AGO","ARE","ARGON","EAR","EON","ERA","ERG","GORE","NAG","NOR","OAR","OGRE","ONAGER","ONE","ORE","RAG","RAN","RANG"]},{"letters":"FLOWER","rows":10,"cols":9,"words":[{"w":"FLOWER","r":7,"c":1,"d":"h"},{"w":"LOWER","r":4,"c":5,"d":"v"},{"w":"ROLE","r":4,"c":3,"d":"h"},{"w":"FLEW","r":6,"c":2,"d":"v"},{"w":"WORE","r":2,"c":3,"d":"v"},{"w":"FLOW","r":2,"c":0,"d":"h"},{"w":"WOLF","r":0,"c":1,"d":"v"},{"w":"FORE","r":1,"c":6,"d":"v"},{"w":"LORE","r":2,"c":5,"d":"h"},{"w":"OWL","r":0,"c":0,"d":"h"},{"w":"FEW","r":1,"c":8,"d":"v"},{"w":"LOW","r":9,"c":0,"d":"h"}],"bonus":["ELF","FLOE","FOE","FOR","FOWL","FOWLER","OLE","ORE","OWE","REF","ROW","ROWEL","WOE"]},{"letters":"WINTER","rows":11,"cols":11,"words":[{"w":"WINTER","r":6,"c":2,"d":"h"},{"w":"TWINE","r":3,"c":4,"d":"v"},{"w":"WRITE","r":4,"c":4,"d":"h"},{"w":"WENT","r":3,"c":1,"d":"h"},{"w":"TIER","r":2,"c":8,"d":"v"},{"w":"WINE","r":3,"c":6,"d":"v"},{"w":"TIRE","r":0,"c":2,"d":"v"},{"w":"WIRE","r":1,"c":1,"d":"h"},{"w":"RENT","r":6,"c":7,"d":"v"},{"w":"TWIN","r":5,"c":2,"d":"v"},{"w":"NEWT","r":9,"c":4,"d":"h"},{"w":"WET","r":8,"c":5,"d":"v"},{"w":"WIN","r":8,"c":0,"d":"h"},{"w":"TEN","r":2,"c":8,"d":"h"}],"bonus":["IN","INERT","INTER","IRE","IT","NET","NIT","NITER","NITRE","REIN","RITE","TERN","TIE","TIN","TINE","TRINE","WE","WIT","WREN"]},{"letters":"PICTURE","rows":11,"cols":10,"words":[{"w":"PICTURE","r":3,"c":3,"d":"h"},{"w":"PRICE","r":2,"c":8,"d":"v"},{"w":"CUTER","r":6,"c":5,"d":"h"},{"w":"TRUCE","r":0,"c":5,"d":"v"},{"w":"ERUPT","r":0,"c":3,"d":"v"},{"w":"PIER","r":1,"c":0,"d":"h"},{"w":"CURE","r":5,"c":6,"d":"v"},{"w":"RICE","r":8,"c":3,"d":"h"},{"w":"TRIP","r":0,"c":5,"d":"h"},{"w":"PURE","r":1,"c":0,"d":"v"},{"w":"TRUE","r":7,"c":3,"d":"v"},{"w":"CUTE","r":10,"c":0,"d":"h"},{"w":"RIPE","r":6,"c":9,"d":"v"},{"w":"CUP","r":8,"c":5,"d":"v"},{"w":"ICE","r":9,"c":7,"d":"h"},{"w":"CUT","r":7,"c":1,"d":"h"}],"bonus":["CITE","CRUET","CUE","CUPRITE","ECRU","EPIC","IRE","PET","PIE","PIT","PUCE","PURI","PUT","RECUT","RIP","RITE","RUT","TIER","TIP","TIRE","TRICE","URIC"]}];
+
+    const SAVE_KEY = 'wordscapes-save-v1';
+
+    let state = {
+        level: 0,
+        coins: 20,
+        found: [],       // target words found in current level
+        bonusFound: [],  // bonus words found in current level
+        hinted: [],      // "r,c" cells revealed by hints
+    };
+
+    function loadSave() {
+        try {
+            const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+            if (s && typeof s.level === 'number' && s.level >= 0) {
+                state = Object.assign(state, s);
+                if (state.level >= LEVELS.length) state.level = LEVELS.length - 1;
+            }
+        } catch (e) {}
+    }
+
+    function save() {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    }
+
+    // ---------- Level / grid ----------
+    let level, cellMap; // cellMap: "r,c" -> {letter, el, words:[indices]}
+
+    const gridEl = document.getElementById('grid');
+    const levelLabel = document.getElementById('levelLabel');
+    const coinsEl = document.getElementById('coins');
+    const progressInfo = document.getElementById('progressInfo');
+
+    function cellsOf(wordObj) {
+        const cells = [];
+        for (let i = 0; i < wordObj.w.length; i++) {
+            const r = wordObj.r + (wordObj.d === 'v' ? i : 0);
+            const c = wordObj.c + (wordObj.d === 'h' ? i : 0);
+            cells.push([r, c]);
+        }
+        return cells;
+    }
+
+    function buildGrid() {
+        level = LEVELS[state.level];
+        cellMap = new Map();
+        level.words.forEach((wo, wi) => {
+            cellsOf(wo).forEach(([r, c], i) => {
+                const key = r + ',' + c;
+                if (!cellMap.has(key)) cellMap.set(key, { letter: wo.w[i], words: [] });
+                cellMap.get(key).words.push(wi);
+            });
+        });
+
+        // size cells to fit viewport width
+        const maxW = Math.min(window.innerWidth - 24, 440);
+        const cellSize = Math.max(22, Math.min(44, Math.floor((maxW - 4 * (level.cols - 1)) / level.cols)));
+        gridEl.style.setProperty('--cell', cellSize + 'px');
+        gridEl.style.gridTemplateColumns = `repeat(${level.cols}, var(--cell))`;
+
+        gridEl.innerHTML = '';
+        for (let r = 0; r < level.rows; r++) {
+            for (let c = 0; c < level.cols; c++) {
+                const key = r + ',' + c;
+                const div = document.createElement('div');
+                if (cellMap.has(key)) {
+                    div.className = 'cell';
+                    div.textContent = cellMap.get(key).letter;
+                    cellMap.get(key).el = div;
+                } else {
+                    div.className = 'cell empty';
+                }
+                gridEl.appendChild(div);
+            }
+        }
+
+        // re-apply saved progress
+        state.found.forEach(w => revealWord(w, false));
+        state.hinted.forEach(key => {
+            const cell = cellMap.get(key);
+            if (cell) cell.el.classList.add('hinted');
+        });
+
+        levelLabel.textContent = 'Level ' + (state.level + 1);
+        updateInfo();
+        buildWheel();
+    }
+
+    function revealWord(word, animate) {
+        const wi = level.words.findIndex(wo => wo.w === word);
+        if (wi < 0) return;
+        cellsOf(level.words[wi]).forEach(([r, c], i) => {
+            const cell = cellMap.get(r + ',' + c);
+            if (!animate) {
+                cell.el.classList.add('revealed');
+            } else {
+                setTimeout(() => cell.el.classList.add('revealed'), i * 60);
+            }
+        });
+    }
+
+    function updateInfo() {
+        const total = level.words.length;
+        const found = state.found.length;
+        const bonus = state.bonusFound.length;
+        progressInfo.textContent =
+            `${found}/${total} words found` +
+            (bonus ? ` · ${bonus} bonus word${bonus > 1 ? 's' : ''}` : '') +
+            ` · ${LEVELS.length} levels total`;
+        coinsEl.textContent = state.coins;
+    }
+
+    // ---------- Letter wheel ----------
+    const wheelWrap = document.getElementById('wheelWrap');
+    const linesSvg = document.getElementById('lines');
+    const currentWordEl = document.getElementById('currentWord');
+
+    let wheelLetters = []; // {ch, el, x, y}
+    let selection = [];    // indices into wheelLetters
+    let dragging = false;
+    let flashTimer = null; // pending clear from the last submitted word
+
+    function buildWheel() {
+        wheelWrap.querySelectorAll('.wheel-letter').forEach(el => el.remove());
+        wheelLetters = [];
+        const chars = level.letters.split('');
+        // shuffle display order
+        for (let i = chars.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [chars[i], chars[j]] = [chars[j], chars[i]];
+        }
+        const rect = wheelWrap.getBoundingClientRect();
+        const R = rect.width / 2 - 34;
+        const cx = rect.width / 2, cy = rect.height / 2;
+        chars.forEach((ch, i) => {
+            const ang = -Math.PI / 2 + (i * 2 * Math.PI) / chars.length;
+            const x = cx + R * Math.cos(ang);
+            const y = cy + R * Math.sin(ang);
+            const el = document.createElement('div');
+            el.className = 'wheel-letter';
+            el.textContent = ch;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            el.dataset.idx = i;
+            wheelWrap.appendChild(el);
+            wheelLetters.push({ ch, el, x, y });
+        });
+    }
+
+    function drawLines(px, py) {
+        let d = '';
+        for (let i = 0; i < selection.length; i++) {
+            const l = wheelLetters[selection[i]];
+            d += (i === 0 ? 'M' : 'L') + l.x + ' ' + l.y + ' ';
+        }
+        if (dragging && selection.length && px !== undefined) d += 'L' + px + ' ' + py;
+        linesSvg.innerHTML = d
+            ? `<path d="${d}" stroke="#3b82f6" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>`
+            : '';
+    }
+
+    function renderCurrentWord(cls) {
+        currentWordEl.className = 'current-word' + (cls ? ' ' + cls : '');
+        currentWordEl.innerHTML = selection
+            .map(i => `<div class="cw-letter">${wheelLetters[i].ch}</div>`)
+            .join('');
+    }
+
+    function letterAt(clientX, clientY) {
+        const el = document.elementFromPoint(clientX, clientY);
+        if (el && el.classList.contains('wheel-letter')) return parseInt(el.dataset.idx, 10);
+        return -1;
+    }
+
+    function addLetter(idx) {
+        if (selection.includes(idx)) {
+            // backtrack: moving to second-to-last deselects last
+            if (selection.length >= 2 && selection[selection.length - 2] === idx) {
+                const removed = selection.pop();
+                wheelLetters[removed].el.classList.remove('selected');
+                renderCurrentWord();
+            }
+            return;
+        }
+        selection.push(idx);
+        wheelLetters[idx].el.classList.add('selected');
+        renderCurrentWord();
+    }
+
+    wheelWrap.addEventListener('pointerdown', e => {
+        if (e.target.id === 'shuffle') return;
+        const idx = letterAt(e.clientX, e.clientY);
+        if (idx < 0) return;
+        e.preventDefault();
+        dragging = true;
+        clearTimeout(flashTimer);
+        clearSelection();
+        addLetter(idx);
+        const rect = wheelWrap.getBoundingClientRect();
+        drawLines(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    document.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const idx = letterAt(e.clientX, e.clientY);
+        if (idx >= 0) addLetter(idx);
+        const rect = wheelWrap.getBoundingClientRect();
+        drawLines(e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    document.addEventListener('pointerup', () => {
+        if (!dragging) return;
+        dragging = false;
+        submitSelection();
+    });
+
+    document.addEventListener('pointercancel', () => {
+        if (!dragging) return;
+        dragging = false;
+        clearSelection();
+        drawLines();
+    });
+
+    function clearSelection() {
+        selection.forEach(i => wheelLetters[i].el.classList.remove('selected'));
+        selection = [];
+        renderCurrentWord();
+        drawLines();
+    }
+
+    // ---------- Word submission ----------
+    const toast = document.getElementById('toast');
+    let toastTimer;
+
+    function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 1400);
+    }
+
+    function flashWord(cls, keepMs) {
+        renderCurrentWord(cls);
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => { clearSelection(); }, keepMs);
+    }
+
+    function submitSelection() {
+        const word = selection.map(i => wheelLetters[i].ch).join('');
+        drawLines();
+        selection.forEach(i => wheelLetters[i].el.classList.remove('selected'));
+
+        if (word.length < 2) { selection = []; renderCurrentWord(); return; }
+
+        const isTarget = level.words.some(wo => wo.w === word);
+        if (isTarget && !state.found.includes(word)) {
+            state.found.push(word);
+            state.coins += word.length;
+            revealWord(word, true);
+            flashWord('good', 500);
+            updateInfo();
+            save();
+            if (state.found.length === level.words.length) {
+                setTimeout(levelComplete, 800);
+            }
+            return;
+        }
+        if (isTarget) {
+            flashWord('dup', 500);
+            showToast('Already found');
+            return;
+        }
+        if (level.bonus.includes(word)) {
+            if (state.bonusFound.includes(word)) {
+                flashWord('dup', 500);
+                showToast('Bonus already found');
+            } else {
+                state.bonusFound.push(word);
+                state.coins += 5;
+                flashWord('bonus', 500);
+                showToast('🪙 Bonus word! +5');
+                updateInfo();
+                save();
+            }
+            return;
+        }
+        currentWordEl.classList.add('shake');
+        clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => { clearSelection(); }, 400);
+    }
+
+    // ---------- Hint ----------
+    document.getElementById('hintBtn').addEventListener('click', () => {
+        if (state.coins < 10) { showToast('Not enough coins — find bonus words!'); return; }
+        // pick a hidden cell, prefer cells that start words
+        const hidden = [];
+        cellMap.forEach((cell, key) => {
+            if (!cell.el.classList.contains('revealed') && !cell.el.classList.contains('hinted')) {
+                hidden.push(key);
+            }
+        });
+        if (!hidden.length) return;
+        const key = hidden[Math.floor(Math.random() * hidden.length)];
+        state.coins -= 10;
+        state.hinted.push(key);
+        cellMap.get(key).el.classList.add('hinted');
+        updateInfo();
+        checkHintCompletions();
+        save();
+    });
+
+    // if hints reveal every remaining letter of a word, count it as found
+    function checkHintCompletions() {
+        level.words.forEach(wo => {
+            if (state.found.includes(wo.w)) return;
+            const done = cellsOf(wo).every(([r, c]) => {
+                const el = cellMap.get(r + ',' + c).el;
+                return el.classList.contains('revealed') || el.classList.contains('hinted');
+            });
+            if (done) {
+                state.found.push(wo.w);
+                revealWord(wo.w, true);
+                updateInfo();
+                if (state.found.length === level.words.length) setTimeout(levelComplete, 800);
+            }
+        });
+    }
+
+    // ---------- Level flow ----------
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayText = document.getElementById('overlayText');
+    const overlayBtn = document.getElementById('overlayBtn');
+
+    function levelComplete() {
+        const isLast = state.level === LEVELS.length - 1;
+        overlayTitle.textContent = isLast ? '🎉 All Levels Complete!' : '✨ Level Complete!';
+        overlayText.textContent = isLast
+            ? `You finished all ${LEVELS.length} levels with ${state.coins} coins. Amazing!`
+            : `Level ${state.level + 1} done · ${state.coins} coins`;
+        overlayBtn.textContent = isLast ? 'Play Again' : 'Next Level';
+        overlay.classList.add('show');
+    }
+
+    overlayBtn.addEventListener('click', () => {
+        overlay.classList.remove('show');
+        if (state.level === LEVELS.length - 1 && state.found.length === LEVELS[state.level].words.length) {
+            state.level = 0;
+        } else {
+            state.level++;
+        }
+        state.found = [];
+        state.bonusFound = [];
+        state.hinted = [];
+        save();
+        buildGrid();
+    });
+
+    document.getElementById('shuffle').addEventListener('click', buildWheel);
+
+    window.addEventListener('resize', () => {
+        if (dragging) return; // mobile URL-bar resizes must not reset an active swipe
+        buildGrid();
+    });
+
+    loadSave();
+    buildGrid();
+    updateInfo();
+    </script>
+</body>
+</html>
