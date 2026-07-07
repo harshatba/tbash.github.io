@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Chain Reaction - tbash.xyz</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            min-height: 100dvh;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 12px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        header { text-align: center; margin-bottom: 12px; }
+
+        header h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #f1f5f9;
+            letter-spacing: 2px;
+        }
+
+        header .subtitle { font-size: 0.85rem; color: #94a3b8; margin-top: 4px; }
+        header .subtitle a { color: #60a5fa; text-decoration: none; }
+
+        .hud {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .player-box {
+            background: rgba(30, 41, 59, 0.8);
+            border: 2px solid rgba(148, 163, 184, 0.25);
+            border-radius: 10px;
+            padding: 6px 16px;
+            text-align: center;
+            min-width: 100px;
+            transition: all 0.2s;
+        }
+
+        .player-box .label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #94a3b8;
+        }
+
+        .player-box .value { font-size: 1.3rem; font-weight: 700; }
+
+        .player-box.p1 .value { color: #f87171; }
+        .player-box.p2 .value { color: #4ade80; }
+
+        .player-box.active.p1 { border-color: #f87171; box-shadow: 0 0 14px rgba(248, 113, 113, 0.45); }
+        .player-box.active.p2 { border-color: #4ade80; box-shadow: 0 0 14px rgba(74, 222, 128, 0.45); }
+        .player-box.dead { opacity: 0.35; }
+
+        .controls { display: flex; gap: 10px; align-items: center; }
+
+        .btn, select {
+            padding: 6px 16px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            background: rgba(59, 130, 246, 0.25);
+            color: #e0e7ff;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.15s;
+            font-family: inherit;
+        }
+
+        .btn:hover, select:hover { background: #3b82f6; color: #fff; }
+        select { background: rgba(30, 41, 59, 0.8); }
+        select option { background: #1e293b; }
+
+        #board {
+            display: grid;
+            gap: 3px;
+            background: rgba(15, 23, 42, 0.6);
+            padding: 6px;
+            border-radius: 12px;
+            border: 2px solid rgba(148, 163, 184, 0.25);
+            transition: border-color 0.25s, box-shadow 0.25s;
+            touch-action: manipulation;
+        }
+
+        #board.turn-p1 { border-color: rgba(248, 113, 113, 0.6); box-shadow: 0 0 20px rgba(248, 113, 113, 0.2); }
+        #board.turn-p2 { border-color: rgba(74, 222, 128, 0.6); box-shadow: 0 0 20px rgba(74, 222, 128, 0.2); }
+
+        .cell {
+            width: var(--cell);
+            height: var(--cell);
+            background: rgba(30, 41, 59, 0.85);
+            border-radius: 7px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .cell:hover { background: rgba(51, 65, 85, 0.95); }
+
+        .cell.exploding { animation: cellFlash 0.28s ease; }
+
+        @keyframes cellFlash {
+            0% { background: rgba(251, 191, 36, 0.85); transform: scale(1.08); }
+            100% { background: rgba(30, 41, 59, 0.85); transform: scale(1); }
+        }
+
+        .orbs {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .orb {
+            width: calc(var(--cell) * 0.42);
+            height: calc(var(--cell) * 0.42);
+            border-radius: 50%;
+            position: absolute;
+            transition: transform 0.2s;
+        }
+
+        .orb.p1 { background: radial-gradient(circle at 32% 30%, #fca5a5, #ef4444 60%, #991b1b); box-shadow: 0 0 6px rgba(239, 68, 68, 0.7); }
+        .orb.p2 { background: radial-gradient(circle at 32% 30%, #86efac, #22c55e 60%, #166534); box-shadow: 0 0 6px rgba(34, 197, 94, 0.7); }
+
+        .cell.critical .orbs { animation: wobble 0.7s ease-in-out infinite; }
+
+        @keyframes wobble {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(-1.5px, 1px) rotate(-3deg); }
+            50% { transform: translate(1.5px, -1px) rotate(3deg); }
+            75% { transform: translate(-1px, -1.5px) rotate(-2deg); }
+        }
+
+        .count1 .orb:nth-child(1) { transform: translate(0, 0); }
+        .count2 .orb:nth-child(1) { transform: translate(calc(var(--cell) * -0.13), 0); }
+        .count2 .orb:nth-child(2) { transform: translate(calc(var(--cell) * 0.13), 0); }
+        .count3 .orb:nth-child(1) { transform: translate(0, calc(var(--cell) * -0.14)); }
+        .count3 .orb:nth-child(2) { transform: translate(calc(var(--cell) * -0.15), calc(var(--cell) * 0.11)); }
+        .count3 .orb:nth-child(3) { transform: translate(calc(var(--cell) * 0.15), calc(var(--cell) * 0.11)); }
+
+        .status {
+            margin-top: 14px;
+            font-size: 1rem;
+            font-weight: 600;
+            min-height: 1.5em;
+            text-align: center;
+        }
+
+        .status .p1-text { color: #f87171; }
+        .status .p2-text { color: #4ade80; }
+
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 15, 30, 0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .overlay.show { display: flex; }
+
+        .overlay .panel {
+            background: #1e293b;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            border-radius: 16px;
+            padding: 32px 40px;
+            text-align: center;
+            animation: pop 0.25s ease;
+        }
+
+        @keyframes pop {
+            from { transform: scale(0.85); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .overlay h2 { font-size: 1.6rem; margin-bottom: 8px; }
+        .overlay p { color: #94a3b8; margin-bottom: 18px; }
+
+        .rules {
+            margin-top: 16px;
+            max-width: 420px;
+            font-size: 0.78rem;
+            color: #94a3b8;
+            text-align: center;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>CHAIN REACTION</h1>
+        <div class="subtitle"><a href="/">cd ..</a> · 2 players · explode to conquer</div>
+    </header>
+
+    <div class="hud">
+        <div class="player-box p1" id="box1">
+            <div class="label">Player 1</div>
+            <div class="value" id="count1">0</div>
+        </div>
+        <div class="controls">
+            <select id="sizeSel" title="Board size">
+                <option value="6x8">6 × 8</option>
+                <option value="7x10" selected>7 × 10</option>
+                <option value="9x12">9 × 12</option>
+            </select>
+            <button class="btn" id="newGame">New Game</button>
+        </div>
+        <div class="player-box p2" id="box2">
+            <div class="label">Player 2</div>
+            <div class="value" id="count2">0</div>
+        </div>
+    </div>
+
+    <div id="board"></div>
+
+    <div class="status" id="status"></div>
+
+    <div class="rules">
+        Tap an empty cell or one of your own to add an orb. When a cell's orbs reach
+        its number of neighbours (corner 2, edge 3, middle 4) it explodes, firing one
+        orb into each neighbour and capturing it. Wipe out all enemy orbs to win.
+    </div>
+
+    <div class="overlay" id="overlay">
+        <div class="panel">
+            <h2 id="winTitle"></h2>
+            <p id="winSub"></p>
+            <button class="btn" id="playAgain">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const boardEl = document.getElementById('board');
+            const statusEl = document.getElementById('status');
+            const overlay = document.getElementById('overlay');
+            const winTitle = document.getElementById('winTitle');
+            const winSub = document.getElementById('winSub');
+            const sizeSel = document.getElementById('sizeSel');
+            const boxes = [document.getElementById('box1'), document.getElementById('box2')];
+            const counts = [document.getElementById('count1'), document.getElementById('count2')];
+
+            const PLAYER_NAMES = ['Player 1', 'Player 2'];
+            const PLAYER_CLASSES = ['p1', 'p2'];
+
+            let cols, rows;
+            let owner, count;        // flat arrays, owner: -1 empty / 0 / 1
+            let current;             // whose turn, 0 or 1
+            let moves;               // total moves played
+            let busy = false;        // chain reaction in progress
+            let gameOver = false;
+            let cells = [];
+
+            function idx(r, c) { return r * cols + c; }
+
+            function capacity(r, c) {
+                let n = 0;
+                if (r > 0) n++;
+                if (r < rows - 1) n++;
+                if (c > 0) n++;
+                if (c < cols - 1) n++;
+                return n;
+            }
+
+            function neighbours(r, c) {
+                const out = [];
+                if (r > 0) out.push([r - 1, c]);
+                if (r < rows - 1) out.push([r + 1, c]);
+                if (c > 0) out.push([r, c - 1]);
+                if (c < cols - 1) out.push([r, c + 1]);
+                return out;
+            }
+
+            function newGame() {
+                const [w, h] = sizeSel.value.split('x').map(Number);
+                cols = w; rows = h;
+                owner = new Array(rows * cols).fill(-1);
+                count = new Array(rows * cols).fill(0);
+                current = 0;
+                moves = 0;
+                busy = false;
+                gameOver = false;
+                overlay.classList.remove('show');
+
+                const cell = Math.min(
+                    Math.floor((Math.min(window.innerWidth, 520) - 40) / cols),
+                    Math.floor((window.innerHeight * 0.62) / rows),
+                    56
+                );
+                boardEl.style.setProperty('--cell', cell + 'px');
+                boardEl.style.gridTemplateColumns = `repeat(${cols}, var(--cell))`;
+
+                boardEl.innerHTML = '';
+                cells = [];
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const div = document.createElement('div');
+                        div.className = 'cell';
+                        const orbs = document.createElement('div');
+                        orbs.className = 'orbs';
+                        div.appendChild(orbs);
+                        div.addEventListener('click', () => onTap(r, c));
+                        boardEl.appendChild(div);
+                        cells.push(div);
+                    }
+                }
+                render();
+            }
+
+            function render() {
+                for (let r = 0; r < rows; r++) {
+                    for (let c = 0; c < cols; c++) {
+                        const i = idx(r, c);
+                        const div = cells[i];
+                        const orbs = div.firstChild;
+                        const n = count[i];
+                        orbs.className = 'orbs count' + Math.min(n, 3);
+                        while (orbs.children.length < Math.min(n, 3)) {
+                            orbs.appendChild(document.createElement('div'));
+                        }
+                        while (orbs.children.length > Math.min(n, 3)) {
+                            orbs.removeChild(orbs.lastChild);
+                        }
+                        for (const orb of orbs.children) {
+                            orb.className = 'orb ' + (owner[i] === 1 ? 'p2' : 'p1');
+                        }
+                        div.classList.toggle('critical', n > 0 && n === capacity(r, c) - 1);
+                    }
+                }
+                const totals = orbTotals();
+                counts[0].textContent = totals[0];
+                counts[1].textContent = totals[1];
+                boxes[0].classList.toggle('active', !gameOver && current === 0);
+                boxes[1].classList.toggle('active', !gameOver && current === 1);
+                boxes[0].classList.toggle('dead', moves >= 2 && totals[0] === 0);
+                boxes[1].classList.toggle('dead', moves >= 2 && totals[1] === 0);
+                boardEl.className = gameOver ? '' : 'turn-' + PLAYER_CLASSES[current];
+                if (!gameOver) {
+                    statusEl.innerHTML = `<span class="${PLAYER_CLASSES[current]}-text">${PLAYER_NAMES[current]}</span>'s turn`;
+                }
+            }
+
+            function orbTotals() {
+                const t = [0, 0];
+                for (let i = 0; i < owner.length; i++) {
+                    if (owner[i] >= 0) t[owner[i]] += count[i];
+                }
+                return t;
+            }
+
+            function alivePlayers() {
+                const t = orbTotals();
+                return [t[0] > 0, t[1] > 0];
+            }
+
+            function onTap(r, c) {
+                if (busy || gameOver) return;
+                const i = idx(r, c);
+                if (owner[i] !== -1 && owner[i] !== current) return;
+                moves++;
+                owner[i] = current;
+                count[i]++;
+                busy = true;
+                resolveChain().then(() => {
+                    busy = false;
+                    if (checkWin()) return;
+                    current = 1 - current;
+                    render();
+                });
+            }
+
+            // Resolve explosions in waves so cascades animate step by step.
+            function resolveChain() {
+                return new Promise((resolve) => {
+                    function wave() {
+                        const exploding = [];
+                        for (let r = 0; r < rows; r++) {
+                            for (let c = 0; c < cols; c++) {
+                                const i = idx(r, c);
+                                if (count[i] >= capacity(r, c)) exploding.push([r, c]);
+                            }
+                        }
+                        if (exploding.length === 0) { render(); resolve(); return; }
+
+                        // Stop early if the board is already fully conquered —
+                        // otherwise a full-board chain would loop forever.
+                        const alive = alivePlayers();
+                        if (moves >= 2 && (!alive[0] || !alive[1])) { render(); resolve(); return; }
+
+                        for (const [r, c] of exploding) {
+                            const i = idx(r, c);
+                            count[i] -= capacity(r, c);
+                            if (count[i] === 0) owner[i] = -1;
+                            const cellDiv = cells[i];
+                            cellDiv.classList.remove('exploding');
+                            void cellDiv.offsetWidth;
+                            cellDiv.classList.add('exploding');
+                            for (const [nr, nc] of neighbours(r, c)) {
+                                const j = idx(nr, nc);
+                                owner[j] = current;
+                                count[j]++;
+                            }
+                        }
+                        render();
+                        setTimeout(wave, 220);
+                    }
+                    wave();
+                });
+            }
+
+            function checkWin() {
+                if (moves < 2) return false;
+                const alive = alivePlayers();
+                if (alive[0] && alive[1]) return false;
+                gameOver = true;
+                const winner = alive[0] ? 0 : 1;
+                render();
+                statusEl.innerHTML = `<span class="${PLAYER_CLASSES[winner]}-text">${PLAYER_NAMES[winner]} wins!</span>`;
+                winTitle.innerHTML = `<span class="${PLAYER_CLASSES[winner]}-text" style="color:${winner === 0 ? '#f87171' : '#4ade80'}">${PLAYER_NAMES[winner]} wins!</span>`;
+                winSub.textContent = 'The board has been conquered.';
+                setTimeout(() => overlay.classList.add('show'), 500);
+                return true;
+            }
+
+            document.getElementById('newGame').addEventListener('click', newGame);
+            document.getElementById('playAgain').addEventListener('click', newGame);
+            sizeSel.addEventListener('change', newGame);
+
+            newGame();
+        })();
+    </script>
+</body>
+</html>
