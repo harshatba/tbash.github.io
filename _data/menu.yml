@@ -1,13 +1,25 @@
-entries:
-  - title: Sudoku
-    url: /tools/sudoku.html
-  - title: Wordscapes
-    url: /tools/wordscapes.html
-  - title: 2048
-    url: /tools/2048.html
-  - title: Chain Reaction
-    url: /tools/chain-reaction.html
-  - title: 💰 Retirement Calculator
-    url: /tools/retirement-calculator.html
-  - title: Writing number 1
-    url: /writing-number-1/
+# External links shown at the top right of the homepage
+external:
+  - title: n8n
+    url: https://n8n.tbash.cc
+  - title: terminal
+    url: https://terminal.tbash.cc
+
+# Grouped navigation sections shown on the homepage
+sections:
+  - title: Games
+    entries:
+      - title: Sudoku
+        url: /tools/sudoku.html
+      - title: Wordscapes
+        url: /tools/wordscapes.html
+      - title: 2048
+        url: /tools/2048.html
+      - title: Chain Reaction
+        url: /tools/chain-reaction.html
+  - title: Utilities
+    entries:
+      - title: 🏠 Home Equity Builder
+        url: /tools/home-equity-builder.html
+      - title: 💰 Retirement Calculator
+        url: /tools/retirement-calculator.html

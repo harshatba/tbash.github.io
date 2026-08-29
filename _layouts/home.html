@@ -3,30 +3,44 @@ layout: default
 ---
 
 <div class="site-header">
-  {% if site.title %}
-    <h1 class="site-title"><a href="{{ "/" | relative_url }}">{{ site.title }}</a></h1>
-  {% endif %}
-  {% if site.description and site.theme_config.show_description %}
-    <p class="site-description">{{ site.description }}</p>
+  <div class="site-header-main">
+    {% if site.title %}
+      <h1 class="site-title"><a href="{{ "/" | relative_url }}">{{ site.title }}</a></h1>
+    {% endif %}
+    {% if site.description and site.theme_config.show_description %}
+      <p class="site-description">{{ site.description }}</p>
+    {% endif %}
+  </div>
+  {% if site.data.menu.external %}
+  <nav class="site-links" aria-label="External links">
+    {% for item in site.data.menu.external %}
+      <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.title }}<span class="ext-arrow">&#8599;</span></a>
+    {% endfor %}
+  </nav>
   {% endif %}
 </div>
-
-{% if site.data.menu %}
-<nav class="site-nav">
-  {% for item in site.data.menu.entries %}
-    {% unless forloop.first %}<span class="nav-sep">&middot;</span>{% endunless %}
-    {% if item.url %}
-      <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
-    {% else %}
-      <span>{{ item.title }}</span>
-    {% endif %}
-  {% endfor %}
-</nav>
-{% endif %}
 
 <hr class="divider">
 
 {{ content }}
+
+{% if site.data.menu.sections %}
+{% for section in site.data.menu.sections %}
+<div class="nav-section">
+  <p class="nav-section-heading">{{ section.title }}</p>
+  <nav class="site-nav">
+    {% for item in section.entries %}
+      {% unless forloop.first %}<span class="nav-sep">&middot;</span>{% endunless %}
+      {% if item.url %}
+        <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
+      {% else %}
+        <span>{{ item.title }}</span>
+      {% endif %}
+    {% endfor %}
+  </nav>
+</div>
+{% endfor %}
+{% endif %}
 
 {% assign posts = site.posts %}
 {% if posts.size > 0 %}
