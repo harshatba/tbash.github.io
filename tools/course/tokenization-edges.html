@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tokenization Edges · Opaque IDs — LLM Visual Course</title>
+<meta name="description" content="A human counts 3 r's in 'strawberry'; the model sees only the opaque token IDs [1618, 707, 15717] — the letters are gone, so it can't count them.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* word picker */
+  .word-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:12px}
+  .wbtn{
+    font-family:var(--mono);font-size:14px;letter-spacing:.02em;
+    color:var(--muted);background:var(--bg-2);
+    border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;transition:.16s;
+  }
+  .wbtn:hover{border-color:var(--line-strong);color:var(--ink)}
+  .wbtn.sel{color:var(--amber);border-color:var(--amber);background:rgba(255,180,84,.12);box-shadow:0 0 0 1px rgba(255,180,84,.25) inset}
+  .wbtn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  .free-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+  .free-in{
+    font-family:var(--mono);font-size:13px;color:var(--ink);background:var(--bg-2);
+    border:1px solid var(--line);border-radius:8px;padding:8px 12px;width:200px;max-width:70vw;
+  }
+  .free-in:focus-visible{outline:2px solid var(--amber);outline-offset:1px;border-color:var(--amber)}
+  .free-in::placeholder{color:var(--muted-2)}
+  .free-note{font-family:var(--mono);font-size:11.5px;color:var(--rose);text-align:center;min-height:1.3em;margin:2px 0 18px}
+  .free-note.hint{color:var(--muted-2)}
+
+  /* the two representations (top: letters / bottom: IDs) */
+  .panels{display:flex;flex-direction:column;gap:0;margin-top:4px}
+  .panel{border:1px solid var(--line);border-radius:14px;background:rgba(11,16,32,.42);padding:16px 18px 18px}
+  .panel-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .panel-lbl{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2)}
+  .panel-sub{font-family:var(--mono);font-size:11px;color:var(--muted-2)}
+  .panel.human{border-color:rgba(140,160,210,.28)}
+  .panel.model{border-color:rgba(255,180,84,.36);background:rgba(255,180,84,.045)}
+
+  /* connector between the two rows */
+  .connector{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 0}
+  .connector .arrow{font-family:var(--mono);font-size:18px;color:var(--amber);line-height:1}
+  .connector .clab{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2)}
+
+  /* human panel — letter tiles */
+  .letters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+  .ltile{
+    font-family:var(--mono);font-size:1.35rem;font-weight:500;color:var(--muted);
+    background:var(--bg-2);border:1px solid var(--line);border-radius:8px;
+    width:34px;height:42px;display:grid;place-items:center;
+  }
+  .ltile.hit{color:var(--amber);border-color:var(--amber);background:rgba(255,180,84,.14);box-shadow:0 0 0 1px rgba(255,180,84,.25) inset}
+  .count-line{font-family:var(--mono);font-size:.95rem;color:var(--muted)}
+  .count-line .cnum{font-family:var(--disp);font-weight:700;font-size:1.5rem;color:var(--amber);vertical-align:-2px;margin-right:4px}
+  .count-line .real-tag{margin-left:10px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--green);border:1px solid rgba(110,231,135,.35);border-radius:6px;padding:2px 7px}
+
+  /* model panel — opaque ID pills */
+  .chunks{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+  .chunk{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .ctext{font-family:var(--mono);font-size:.8rem;color:var(--muted-2);text-decoration:line-through;text-decoration-color:var(--rose);opacity:.7}
+  .cid{
+    font-family:var(--mono);font-size:1.25rem;font-weight:600;color:var(--amber);
+    background:rgba(255,180,84,.1);border:1px solid rgba(255,180,84,.4);border-radius:9px;
+    padding:8px 14px;letter-spacing:.02em;
+  }
+  .chunk-note{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);text-align:center;margin:-4px 0 14px}
+  .lost{font-family:var(--mono);font-size:.92rem;color:var(--muted)}
+  .lost s{color:var(--rose);text-decoration-color:var(--rose)}
+  .lost .no{color:var(--muted-2)}
+
+  .flow-cap{font-family:var(--mono);font-size:11.5px;color:var(--muted-2);text-align:center;margin-top:16px;line-height:1.6}
+  .flow-cap b{color:var(--amber)}
+
+  /* illustrative-data note (amber, prominent) */
+  .illus{margin:18px 0 4px;border:1px solid rgba(255,180,84,.32);border-left:3px solid var(--amber);border-radius:12px;background:linear-gradient(180deg,rgba(255,180,84,.06),var(--bg-2));padding:14px 18px}
+  .illus .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px}
+  .illus p{color:var(--muted);font-size:.94rem;margin:0}
+  .illus code{font-family:var(--mono);font-size:.86em;background:rgba(255,180,84,.14);color:var(--amber);padding:2px 6px;border-radius:5px}
+
+  .conceptual{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center;margin:16px 0 2px;overflow-x:auto;white-space:nowrap;padding-bottom:2px}
+  .conceptual .op{color:var(--amber)}
+  .conceptual .gone{color:var(--muted-2);text-decoration:line-through;text-decoration-color:var(--rose)}
+
+  .hood code{font-family:var(--mono)}
+  .hood .strike{text-decoration:line-through;text-decoration-color:var(--rose)}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">15 · Tokenization edges — opaque IDs</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 15/15</span>
+  <h1>Why it can't count the <span class="amber">r</span>'s in "strawberry"</h1>
+  <p class="lede">The model never sees letters. Once text is tokenized it reads a handful of <span class="amber">opaque token IDs</span> — row numbers, not spelling. So a question about the letters <em>inside</em> a token is invisible to it. Here's exactly what gets lost.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~4 min</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>none</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Back on <a href="embeddings-lookup.html">lesson 1</a>, text became token IDs and the letters were dropped on the floor. Every page since has worked on vectors keyed by those IDs — never once on characters. This page shows the <span class="strong-ink">cost</span> of that.</p>
+    <p>To the model, <span class="amber">"strawberry"</span> isn't one letter-by-letter thing — it's a few <span class="strong-ink">chunks</span>, each an opaque ID. The spelling is gone the moment it's tokenized; all that survives is a short list of integers.</p>
+    <p>So "how many r's in strawberry?" asks about letters sitting <span class="strong-ink">inside</span> chunks the model can't see into. It's not being dumb — the information literally isn't in its input.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>What you see vs. what the model sees</span></div>
+
+    <div class="word-row" id="wordRow"><!-- word chips injected --></div>
+    <div class="free-row">
+      <input class="free-in" id="freeIn" type="text" inputmode="text" autocomplete="off" spellcheck="false"
+             placeholder="or type a word…" aria-label="Type a word to tokenize">
+      <button class="btn" id="freeGo">Tokenize ▸</button>
+    </div>
+    <div class="free-note hint" id="freeNote">Try one of the four — this toy only knows those words.</div>
+
+    <div class="panels" role="group" aria-label="The same word as letters (top) and as opaque token IDs (bottom)">
+      <!-- HUMAN: the top row -->
+      <div class="panel human">
+        <div class="panel-h">
+          <span class="panel-lbl">What the human sees</span>
+          <span class="panel-sub">raw letters — you can count them</span>
+        </div>
+        <div class="letters" id="letters" aria-live="polite"></div>
+        <div class="count-line" id="countLine"></div>
+      </div>
+
+      <!-- flow -->
+      <div class="connector" aria-hidden="true">
+        <span class="clab">tokenize</span>
+        <span class="arrow">↓</span>
+      </div>
+
+      <!-- MODEL: the bottom row -->
+      <div class="panel model">
+        <div class="panel-h">
+          <span class="panel-lbl" style="color:var(--amber)">What the model sees</span>
+          <span class="panel-sub">opaque IDs — letters removed</span>
+        </div>
+        <div class="chunks" id="chunks"></div>
+        <div class="chunk-note" id="chunkNote"></div>
+        <div class="lost" id="lost"></div>
+      </div>
+    </div>
+
+    <p class="flow-cap" id="flowCap">the model gets the <b>bottom row</b>. The <b>r</b>'s live <em>inside</em> chunks it reads as single IDs.</p>
+
+    <div class="conceptual" id="conceptual"></div>
+
+    <div class="illus">
+      <div class="k">Illustrative data — not computed</div>
+      <p>The chunk split and these ID numbers are <b style="color:var(--amber)">hard-coded for the lesson</b>. A real BPE tokenizer chunks by frequency and assigns entirely different IDs — <code>"strawberry"</code> might split as <code>["str","aw","berry"]</code> or not, with its own vocabulary numbers. The <em>opacity</em> is the real point, not these exact values. (The letter <b>count</b>, by contrast, is computed live from the actual word string.)</p>
+    </div>
+
+    <p class="stage-note"><span class="key amber">TRY →</span> Click <b>strawberry</b> (the default): the top row highlights all <b>3</b> of its <b>r</b>'s and counts them; the bottom row is three IDs with no letters left to count. Now click <b>cat</b>, <b>unbelievable</b>, or <b>GPT</b> — or type a word — and watch the two rows drift apart.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers (word = <span style="color:var(--amber)">strawberry</span>)</summary>
+    <div class="hood-body">
+      <p><code>"strawberry"</code> → chunks <code>["str", "aw", "berry"]</code> → IDs <code>[1618, 707, 15717]</code> <span class="muted">(illustrative — not a real vocabulary)</span>.</p>
+      <p>A human reads the string letter by letter: <code>s·t·<b style="color:var(--amber)">r</b>·a·w·b·e·<b style="color:var(--amber)">r</b>·<b style="color:var(--amber)">r</b>·y</code> and counts the <code>r</code>'s = <b style="color:var(--amber)">3</b>. That count on this page is computed from the real word string, so it's always right.</p>
+      <p>The model's input is the three integers <code>[1618, 707, 15717]</code>. Nothing in those numbers encodes "how many r's" — the embedding for each chunk was learned from how the chunk is <em>used</em>, not from its spelling. The struck line <span class="strike">letter count: unavailable</span> is honest: there are no letters in an ID to tally.</p>
+      <p>This is why letter puzzles, rhyme edge-cases, and character counts trip models up: it's a <b>tokenization blind spot</b>, not a reasoning failure. Real tokenizers (BPE) chunk by frequency, so the exact split and IDs differ — but the opacity is real, and it's why "how many r's in strawberry" is a genuinely hard question for a model that never sees the letters.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The model can obviously see the letters in a word it just read — it read the word, didn't it?</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It reads <b>opaque token IDs</b>, not characters. Once "strawberry" becomes three chunk-IDs, the individual letters are gone — so it can't reliably count them, spell backwards, or rhyme by ending.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>The model reads <b>token IDs, not letters</b>. Once "strawberry" is <b>[1618, 707, 15717]</b>, the spelling is gone — so per-letter questions ask about information its input no longer contains.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Why do models miscount the letters in a word like "strawberry"?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">They're bad at arithmetic and lose track when counting past two.</button>
+      <button class="opt" data-correct="1">They read opaque token IDs, not letters — the spelling is gone after tokenization.</button>
+      <button class="opt" data-correct="0">The word was probably misspelled somewhere in the training data.</button>
+    </div>
+    <div class="why"><b>Why:</b> tokenization replaces letters with chunk IDs; a per-letter question asks about information the model's input no longer contains — a tokenization blind spot, not a reasoning failure.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="hallucination.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Why models hallucinate</div></a>
+  <a href="index.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Back to the map — you've closed the forward pass, ID → word</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Tokenization edges — opaque IDs.
+   The letter COUNT is COMPUTED live from the real word string.
+   The chunk split + IDs are ILLUSTRATIVE hard-coded data (TOKENIZE), NOT
+   computed — real BPE differs (said on-page).
+   Globals from course-data.js: TOKENIZE {word -> {chunks, ids}}, COUNT_LETTER.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+
+  const WORDS   = Object.keys(TOKENIZE);          // ['strawberry','cat','unbelievable','GPT']
+  const LETTER  = COUNT_LETTER;                   // 'r'
+  let current   = WORDS.includes('strawberry') ? 'strawberry' : WORDS[0];
+
+  /* ---- word picker chips ---- */
+  const wordRow = $('#wordRow');
+  WORDS.forEach(w=>{
+    const b = document.createElement('button');
+    b.className = 'wbtn' + (w===current?' sel':'');
+    b.textContent = w;
+    b.setAttribute('aria-pressed', w===current?'true':'false');
+    b.addEventListener('click', ()=> setWord(w));
+    wordRow.appendChild(b);
+  });
+  function syncChips(){
+    Array.from(wordRow.children).forEach(b=>{
+      const on = b.textContent===current;
+      b.classList.toggle('sel', on);
+      b.setAttribute('aria-pressed', on?'true':'false');
+    });
+  }
+
+  /* ---- free-text: maps to the hard-coded set; unknown -> honest message ---- */
+  const freeIn = $('#freeIn'), freeNote = $('#freeNote');
+  function tryFree(){
+    const raw = freeIn.value.trim();
+    if(!raw){ return; }
+    const hit = WORDS.find(w => w.toLowerCase() === raw.toLowerCase());
+    if(hit){
+      freeIn.value = '';
+      freeNote.className = 'free-note hint';
+      freeNote.textContent = 'Try one of the four — this toy only knows those words.';
+      setWord(hit);
+    } else {
+      freeNote.className = 'free-note';
+      freeNote.textContent = '“' + raw + '” is not in this toy tokenizer.';
+    }
+  }
+  $('#freeGo').addEventListener('click', tryFree);
+  freeIn.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); tryFree(); } });
+
+  /* ---- count the target letter — COMPUTED from the real word string ---- */
+  function countLetter(word){
+    let n = 0;
+    for(const ch of word){ if(ch.toLowerCase() === LETTER.toLowerCase()) n++; }
+    return n;
+  }
+
+  /* ---- render both rows for the current word ---- */
+  function render(){
+    const word = current;
+    const data = TOKENIZE[word];      // {chunks, ids} — illustrative, hard-coded
+
+    /* HUMAN row: one tile per real character; highlight each target letter */
+    const lettersEl = $('#letters'); lettersEl.innerHTML = '';
+    for(const ch of word){
+      const isHit = ch.toLowerCase() === LETTER.toLowerCase();
+      const t = document.createElement('div');
+      t.className = 'ltile' + (isHit ? ' hit' : '');
+      t.textContent = ch;
+      lettersEl.appendChild(t);
+    }
+    const n = countLetter(word);      // real, from the string
+    const plural = (n === 1) ? '' : '’s'; // "1 r"  vs  "3 r’s"
+    $('#countLine').innerHTML =
+      '<span class="cnum">' + n + '</span>' +
+      '<span>' + LETTER + plural + ' — counted from the letters</span>' +
+      '<span class="real-tag" title="computed live from the word string">real</span>';
+
+    /* MODEL row: opaque ID pills (letters struck out), no letters to count */
+    const chunksEl = $('#chunks'); chunksEl.innerHTML = '';
+    data.chunks.forEach((c,i)=>{
+      const wrap = document.createElement('div');
+      wrap.className = 'chunk';
+      const txt = document.createElement('div');
+      txt.className = 'ctext';
+      txt.textContent = '"' + c + '"';
+      const id = document.createElement('div');
+      id.className = 'cid';
+      id.textContent = data.ids[i];
+      wrap.appendChild(txt);
+      wrap.appendChild(id);
+      chunksEl.appendChild(wrap);
+    });
+    const nTok = data.ids.length;
+    $('#chunkNote').textContent =
+      word + ' → ' + nTok + ' token' + (nTok===1?'':'s') + ' → IDs [' + data.ids.join(', ') + ']';
+    $('#lost').innerHTML =
+      '<s>letter count: unavailable</s> <span class="no">— there are no letters in an ID to tally</span>';
+
+    /* conceptual formula line */
+    $('#conceptual').innerHTML =
+      '"' + word + '" <span class="op">→</span> tokenizer <span class="op">→</span> [' +
+      data.ids.join(', ') + '] <span class="op">→</span> <span class="gone">(letters gone)</span>';
+
+    syncChips();
+  }
+
+  function setWord(w){
+    if(!TOKENIZE[w]) return;
+    current = w;
+    render();
+  }
+
+  /* ---- init ---- */
+  render();
+})();
+</script>
+</body>
+</html>
