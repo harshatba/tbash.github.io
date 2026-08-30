@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How LLMs Run Fast — inference efficiency</title>
+<meta name="description" content="Part 2 of a visual LLM course: how large language models are made fast and cheap to run — quantization, KV cache, speculative decoding, batching and more, explained visually.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1020; --bg-2:#0e1528; --panel:#131c34; --panel-2:#182444;
+    --line:rgba(140,160,210,.14); --line-strong:rgba(140,160,210,.28);
+    --ink:#eaf0ff; --muted:#93a1c4; --muted-2:#657297;
+    --amber:#ffb454; --amber-deep:#f5972a;
+    --cyan:#43d6c8; --violet:#9d8cff; --rose:#ff7a8a; --green:#6ee787;
+    --grid:rgba(120,150,220,.06);
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(157,140,255,.10), transparent 60%),
+      radial-gradient(1000px 640px at 8% 12%, rgba(67,214,200,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.65;
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;
+  }
+  ::selection{background:rgba(255,180,84,.28)}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 26px}
+  a{color:var(--cyan);text-decoration:none}
+  a:hover{color:var(--ink)}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.24em;text-transform:uppercase;color:var(--amber);display:inline-flex;align-items:center;gap:10px}
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--amber);opacity:.7}
+  h1,h2,h3,h4{font-family:var(--disp);font-weight:600;line-height:1.08;margin:0}
+  p{margin:0}
+  .lede{color:var(--muted);font-size:1.06rem;max-width:62ch}
+  .strong-ink{color:var(--ink);font-weight:500}
+  .amber{color:var(--amber)} .cyan{color:var(--cyan)} .violet{color:var(--violet)} .rose{color:var(--rose)} .green{color:var(--green)}
+  .mono{font-family:var(--mono)}
+
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:60;height:3px;background:transparent}
+  .topbar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--cyan),var(--rose));transition:width .1s linear}
+  .home-link{position:fixed;top:14px;left:16px;z-index:61;font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted-2);background:rgba(11,16,32,.6);border:1px solid var(--line);border-radius:8px;padding:6px 11px;backdrop-filter:blur(6px)}
+  .home-link:hover{color:var(--amber);border-color:var(--line-strong)}
+  .rail{position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:55;display:flex;flex-direction:column;gap:11px}
+  @media(max-width:900px){.rail{display:none}}
+  .rail a{width:9px;height:9px;border-radius:50%;border:1px solid var(--line-strong);background:transparent;transition:.2s;position:relative}
+  .rail a:hover{border-color:var(--cyan)}
+  .rail a.on{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 12px rgba(67,214,200,.5)}
+  .rail a .lbl{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:10.5px;white-space:nowrap;color:var(--muted);background:rgba(14,21,40,.9);border:1px solid var(--line);border-radius:6px;padding:3px 8px;opacity:0;pointer-events:none;transition:.18s}
+  .rail a:hover .lbl{opacity:1}
+
+  header.hero{min-height:100svh;display:flex;flex-direction:column;justify-content:center;position:relative;padding:80px 0 60px;border-bottom:1px solid var(--line);overflow:hidden}
+  .hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:46px 46px;mask-image:radial-gradient(circle at 50% 42%,#000 30%,transparent 78%);pointer-events:none}
+  .hero h1{font-size:clamp(2.5rem,6.4vw,4.7rem);letter-spacing:-.02em;margin:14px 0 0;max-width:15ch}
+  .hero h1 .flow{color:var(--cyan)}
+  .hero .lede{margin-top:22px;font-size:1.14rem}
+  .hero .wrap{position:relative;z-index:2}
+  .backp{font-family:var(--mono);font-size:12px;color:var(--muted-2);margin-bottom:6px;display:inline-block}
+  .ambient{position:absolute;inset:0;pointer-events:none;z-index:0}
+  .chip-drift{position:absolute;font-family:var(--mono);font-size:12px;padding:4px 9px;border-radius:7px;border:1px solid var(--line-strong);background:rgba(20,30,56,.6);color:var(--muted);white-space:nowrap;animation:drift linear infinite;opacity:0}
+  @keyframes drift{0%{transform:translateX(-60px);opacity:0}12%{opacity:.9}88%{opacity:.9}100%{transform:translateX(105vw);opacity:0}}
+  .scroll-hint{margin-top:50px;font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--muted-2);text-transform:uppercase;display:flex;align-items:center;gap:12px}
+  .scroll-hint .dot{width:7px;height:7px;border-radius:50%;background:var(--cyan);animation:blink 1.6s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+  .legend{display:flex;flex-wrap:wrap;gap:14px 22px;margin-top:38px;padding-top:26px;border-top:1px solid var(--line)}
+  .legend .li{display:flex;align-items:flex-start;gap:9px;font-family:var(--mono);font-size:12px;color:var(--muted);max-width:30ch}
+  .legend .sw{width:12px;height:12px;border-radius:4px;flex:none;margin-top:3px}
+  .legend .li b{color:var(--ink);font-weight:500;display:block}
+
+  section{padding:92px 0;border-bottom:1px solid var(--line);position:relative}
+  .sec-head{max-width:66ch;margin-bottom:38px}
+  .sec-head .num{font-family:var(--mono);font-size:13px;color:var(--muted-2);letter-spacing:.1em}
+  .sec-head h2{font-size:clamp(1.7rem,3.8vw,2.55rem);letter-spacing:-.015em;margin:14px 0 18px}
+  .sec-head p{color:var(--muted);font-size:1.05rem}
+  .sec-head p + p{margin-top:14px}
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  .stage{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:18px;padding:32px;position:relative;overflow:hidden}
+  .stage::before{content:"";position:absolute;inset:0;border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 30%);pointer-events:none}
+  .stage-label{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted-2);margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  .stage-label .rgt{display:flex;align-items:center;gap:10px}
+  .stage-note{color:var(--muted);font-size:.92rem;margin-top:22px;border-top:1px solid var(--line);padding-top:18px}
+  .stage-note .key{font-family:var(--mono);font-size:.8rem;letter-spacing:.06em}
+
+  .myth{margin-top:20px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:rgba(11,16,32,.5)}
+  .myth .m-row{display:grid;grid-template-columns:74px 1fr;gap:13px;padding:12px 15px;font-size:.9rem;align-items:start}
+  .myth .m-row + .m-row{border-top:1px solid var(--line)}
+  .myth .lbl2{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px;text-align:center;white-space:nowrap}
+  .myth .m-x{background:rgba(255,122,138,.14);color:var(--rose)}
+  .myth .m-r{background:rgba(110,231,135,.14);color:var(--green)}
+  .myth .txt{color:var(--muted)} .myth .m-row.real .txt{color:var(--ink)}
+
+  .btn{font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;color:var(--ink);background:var(--panel-2);border:1px solid var(--line-strong);border-radius:8px;padding:8px 15px;cursor:pointer;transition:.18s;display:inline-flex;align-items:center;gap:8px}
+  .btn:hover{border-color:var(--cyan);color:var(--cyan)}
+  .btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .btn .ico{width:0;height:0;border-left:8px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent}
+  .seg{font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s}
+  .seg.active{background:var(--rose);color:#2a0810;border-color:var(--rose)}
+  .seg:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+  .segrow{display:flex;gap:8px;flex-wrap:wrap}
+  .toggle{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+  .toggle .seg.active{background:var(--cyan);color:#04201d;border-color:var(--cyan)}
+  input[type=range]{width:100%;accent-color:var(--cyan);height:24px;cursor:pointer}
+
+  /* bottleneck badges */
+  .bneck{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px;border:1px solid;white-space:nowrap}
+  .bn-compute{color:var(--violet);border-color:rgba(157,140,255,.5);background:rgba(157,140,255,.1)}
+  .bn-band{color:var(--cyan);border-color:rgba(67,214,200,.5);background:rgba(67,214,200,.1)}
+  .bn-cap{color:var(--rose);border-color:rgba(255,122,138,.5);background:rgba(255,122,138,.1)}
+
+  /* generic bars / meters */
+  .bar-track{height:22px;background:var(--bg-2);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .bar-fill{height:100%;width:0;border-radius:6px;transition:width 1s cubic-bezier(.2,.8,.2,1)}
+  .metric-row{display:grid;grid-template-columns:150px 1fr 96px;gap:14px;align-items:center;margin-bottom:14px}
+  @media(max-width:560px){.metric-row{grid-template-columns:120px 1fr 72px;gap:10px}}
+  .metric-row .lab{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .metric-row .num{font-family:var(--mono);font-size:13px;color:var(--ink);text-align:right}
+  .reads{display:flex;gap:30px;flex-wrap:wrap;margin-top:8px}
+  .read .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2)}
+  .read .v{font-family:var(--mono);font-size:1.7rem;color:var(--ink);line-height:1.1}
+  .read .v small{font-size:.42em;color:var(--muted-2)}
+  .read .v.good{color:var(--green)} .read .v.cy{color:var(--cyan)} .read .v.vi{color:var(--violet)} .read .v.am{color:var(--amber)}
+
+  /* token chips */
+  .tok{font-family:var(--mono);font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line-strong);background:rgba(24,36,68,.7);color:var(--muted);white-space:nowrap;transition:.25s}
+  .tok.draft{border-color:var(--amber);color:var(--amber)}
+  .tok.accepted{border-color:var(--green);color:#06210f;background:var(--green)}
+  .tok.rejected{border-color:var(--rose);color:var(--rose);opacity:.6;text-decoration:line-through}
+  .tok.filled{border-color:var(--violet);color:#0d0a1e;background:var(--violet)}
+  .tok.committed{border-color:var(--line-strong);color:var(--ink);background:rgba(24,36,68,.9)}
+
+  /* ch01 phase timeline */
+  .phase-cells{display:flex;flex-wrap:wrap;gap:6px;min-height:38px;margin:6px 0 20px}
+  .pcell{width:26px;height:26px;border-radius:6px;border:1px solid var(--line-strong);background:var(--bg-2);transition:.3s}
+  .pcell.pre{background:var(--violet);border-color:var(--violet)}
+  .pcell.dec{background:var(--cyan);border-color:var(--cyan)}
+  .phase-tag{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-bottom:6px}
+
+  /* ch02 bit strip */
+  .bits{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 4px}
+  .bcell{width:16px;height:22px;border-radius:3px;border:1px solid var(--line-strong);background:var(--bg-2);transition:.3s}
+  .bcell.sign{background:var(--amber);border-color:var(--amber)}
+  .bcell.exp{background:rgba(67,214,200,.55);border-color:var(--cyan)}
+  .bcell.man{background:var(--rose);border-color:var(--rose)}
+  .bzone{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+  .bzone-lab{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .bstrip-wrap{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-end}
+  .bval{font-family:var(--mono);font-size:.95rem;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;min-width:220px}
+  .bval .k{font-size:10.5px;color:var(--muted-2);letter-spacing:.1em;text-transform:uppercase}
+  .bval .stored{color:var(--cyan)}
+
+  /* ch03 quantization */
+  .quant-wrap{display:grid;grid-template-columns:1.35fr .95fr;gap:24px;align-items:start}
+  @media(max-width:820px){.quant-wrap{grid-template-columns:1fr}}
+  .quant-svg{width:100%;height:auto;background:var(--bg-2);border:1px solid var(--line);border-radius:14px}
+  .quant-side .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2);margin:14px 0 8px}
+  .tank{width:100%;height:26px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;overflow:hidden;position:relative;margin-top:4px}
+  .tank .seg-w{height:100%;background:linear-gradient(90deg,#e85f70,var(--rose));width:0;transition:width .7s cubic-bezier(.2,.8,.2,1);position:absolute;left:0;top:0}
+  .tank .gpu-line{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--amber);left:57%}
+  .tank .gpu-line::after{content:'80 GB GPU';position:absolute;top:-15px;left:4px;font-family:var(--mono);font-size:9px;color:var(--amber);white-space:nowrap}
+  .qchip{display:inline-block;font-family:var(--mono);font-size:11px;padding:4px 10px;border-radius:7px;margin-top:6px}
+  .qchip.ok{background:rgba(110,231,135,.14);color:var(--green)}
+  .qchip.mid{background:rgba(255,180,84,.14);color:var(--amber)}
+  .qchip.bad{background:rgba(255,122,138,.14);color:var(--rose)}
+
+  /* ch04/05 grids */
+  .cellgrid{display:grid;gap:4px;margin:6px 0}
+  .gcell{aspect-ratio:1;border-radius:4px;background:var(--bg-2);border:1px solid var(--line);transition:.25s}
+  .gcell.kv{background:rgba(67,214,200,.75);border-color:var(--cyan)}
+  .gcell.newkv{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 8px rgba(67,214,200,.5)}
+  .gcell.reserved{background:repeating-linear-gradient(45deg,rgba(140,160,210,.1) 0 5px,transparent 5px 10px);border-style:dashed}
+  .gcell.r1{background:rgba(157,140,255,.7);border-color:var(--violet)}
+  .gcell.r2{background:rgba(67,214,200,.7);border-color:var(--cyan)}
+  .gcell.r3{background:rgba(255,180,84,.7);border-color:var(--amber)}
+  .gcell.r4{background:rgba(255,122,138,.7);border-color:var(--rose)}
+  .gcell.r5{background:rgba(110,231,135,.7);border-color:var(--green)}
+  .gcell.shared{background:rgba(110,231,135,.7);border-color:var(--green)}
+  .gcell.skip{background:repeating-linear-gradient(45deg,rgba(110,231,135,.14) 0 5px,transparent 5px 10px);border-color:rgba(110,231,135,.4)}
+  .gcell.tail{background:rgba(157,140,255,.6);border-color:var(--violet)}
+  .costbar{height:16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .costbar .f{height:100%;width:0;background:linear-gradient(90deg,var(--amber-deep),var(--rose));transition:width .5s}
+
+  /* ch06 speculative — towers */
+  .spec-top{display:grid;grid-template-columns:130px 1fr;gap:22px;align-items:center;margin-bottom:8px}
+  @media(max-width:640px){.spec-top{grid-template-columns:1fr}}
+  .towers{display:flex;gap:16px;justify-content:center}
+  .tower{display:flex;flex-direction:column-reverse;gap:3px;align-items:center}
+  .tslab{width:52px;height:8px;border-radius:3px;border:1px solid var(--line)}
+  .tower.draft .tslab{background:linear-gradient(90deg,rgba(255,180,84,.5),rgba(110,231,135,.5))}
+  .tower.target .tslab{background:linear-gradient(90deg,rgba(255,122,138,.5),rgba(255,180,84,.5))}
+  .tower .tlab{font-family:var(--mono);font-size:9.5px;color:var(--muted-2);margin-top:6px;text-align:center;line-height:1.3}
+  .spec-line{display:flex;gap:7px;flex-wrap:wrap;min-height:38px;align-items:center;margin:4px 0}
+  .spec-out{font-family:var(--mono);font-size:.98rem;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin-top:16px;min-height:50px;line-height:1.9}
+  .race{margin-top:20px;display:flex;flex-direction:column;gap:10px}
+  .race .lane{position:relative}
+  .race .lane .rl{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-bottom:4px}
+  .race .track{height:16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .race .track .f{height:100%;width:0;transition:width .4s linear}
+  .race .plain .f{background:linear-gradient(90deg,#5a4fd6,var(--violet))}
+  .race .spec .f{background:linear-gradient(90deg,var(--amber-deep),var(--green))}
+
+  /* ch07 batching */
+  .batch-grid{display:grid;gap:4px;margin:8px 0}
+  .bg-cell{height:20px;border-radius:4px;background:var(--bg-2);border:1px solid var(--line);transition:.2s}
+  .bg-cell.on{background:rgba(110,231,135,.7);border-color:var(--green)}
+  .bg-cell.idle{background:repeating-linear-gradient(45deg,rgba(140,160,210,.08) 0 5px,transparent 5px 10px)}
+  .bg-cell.a{background:rgba(157,140,255,.6);border-color:var(--violet)}
+  .bg-cell.b{background:rgba(67,214,200,.6);border-color:var(--cyan)}
+  .bg-cell.c{background:rgba(255,180,84,.6);border-color:var(--amber)}
+  .bg-cell.d{background:rgba(255,122,138,.6);border-color:var(--rose)}
+
+  /* ch08 techniques grid */
+  .tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:680px){.tech-grid{grid-template-columns:1fr}}
+  .tech-card{background:var(--bg-2);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .tech-card h4{font-size:1.1rem;margin-bottom:4px}
+  .tech-card .mini{height:64px;display:flex;align-items:center;justify-content:center;margin:8px 0 12px;color:var(--muted-2)}
+  .tech-card p{color:var(--muted);font-size:.9rem;margin-bottom:12px}
+  .tech-card .beats{display:flex;gap:6px;flex-wrap:wrap}
+  .expert{width:22px;height:22px;border-radius:5px;border:1px solid var(--line-strong);background:var(--bg);display:inline-block;margin:2px}
+  .expert.on{background:var(--violet);border-color:var(--violet);box-shadow:0 0 8px rgba(157,140,255,.5)}
+
+  /* ch09 matrix */
+  .matrix{width:100%;border-collapse:separate;border-spacing:0;font-size:.9rem;overflow:hidden;border:1px solid var(--line);border-radius:14px}
+  .matrix-scroll{overflow-x:auto}
+  .matrix th,.matrix td{padding:11px 12px;text-align:left;border-bottom:1px solid var(--line)}
+  .matrix thead th{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2);background:var(--bg-2);white-space:nowrap}
+  .matrix tbody th{font-family:var(--body);font-weight:500;color:var(--ink);background:var(--panel);white-space:nowrap}
+  .matrix td{text-align:center}
+  .matrix tr:last-child th,.matrix tr:last-child td{border-bottom:none}
+  .dotb{display:inline-block;width:16px;height:16px;border-radius:5px}
+  .dotb.hit{opacity:1} .dotb.compute{background:var(--violet)} .dotb.band{background:var(--cyan)} .dotb.cap{background:var(--rose)}
+  .dotb.cost{background:transparent;border:1px dashed var(--rose)}
+  .decide{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+  .decide .d{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:baseline;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px}
+  .decide .if{font-family:var(--mono);font-size:.85rem;color:var(--amber);white-space:nowrap}
+  .decide .then{color:var(--muted);font-size:.92rem}
+  .decide .then b{color:var(--ink);font-weight:500}
+  .recap{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:26px}
+  .rrow{display:grid;grid-template-columns:minmax(160px,.8fr) 1.7fr;gap:0;background:var(--panel)}
+  @media(max-width:640px){.rrow{grid-template-columns:1fr}}
+  .rq{padding:14px 18px;font-family:var(--mono);font-size:12.5px;color:var(--cyan);background:var(--bg-2);border-right:1px solid var(--line)}
+  @media(max-width:640px){.rq{border-right:none;border-bottom:1px solid var(--line)}}
+  .ra{padding:14px 18px;color:var(--muted);font-size:.92rem}
+  .ra b{color:var(--ink);font-weight:500}
+
+  footer{padding:70px 0 100px;color:var(--muted-2);font-size:.9rem}
+  footer .wrap{display:flex;flex-direction:column;gap:10px}
+  footer a{color:var(--muted)} footer a:hover{color:var(--cyan)}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="fill" id="progressFill"></div></div>
+<a class="home-link" href="/">cd ..</a>
+<nav class="rail" id="rail" aria-label="Chapters"></nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <div class="hero-grid"></div>
+  <div class="ambient" id="ambient" aria-hidden="true"></div>
+  <div class="wrap">
+    <a class="backp" href="/tools/llm-visual-course.html">← Part 1 · How LLMs Work</a>
+    <span class="eyebrow">Part 2 · Advanced · no math required</span>
+    <h1>How a large language model runs <span class="flow">fast</span> — and <span class="flow">cheap</span></h1>
+    <p class="lede">You know how an LLM <em>works</em> — tokens, attention, next-token prediction, prefill vs decode. This part is the other half: how a <span class="strong-ink">140-gigabyte</span> model gets squeezed onto a single GPU and made to answer in milliseconds. Every chapter is one trick, and every trick beats one of these bottlenecks.</p>
+
+    <div class="legend" aria-label="The three bottlenecks">
+      <span class="li"><span class="sw" style="background:var(--violet)"></span><span><b>Compute-bound</b> doing the math (prefill)</span></span>
+      <span class="li"><span class="sw" style="background:var(--cyan)"></span><span><b>Memory-bandwidth-bound</b> moving weights in &amp; out (decode)</span></span>
+      <span class="li"><span class="sw" style="background:var(--rose)"></span><span><b>Memory-capacity-bound</b> fitting it all in VRAM</span></span>
+    </div>
+
+    <div class="scroll-hint"><span class="dot"></span> Scroll to begin · 9 short chapters</div>
+  </div>
+</header>
+
+<!-- ============ 01 WHY SLOW ============ -->
+<section id="slow" data-label="Why it's slow">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">01 / THE TWO BOTTLENECKS</div>
+      <h2>Reading your prompt is fast. <span class="cyan">Writing</span> the reply is the slow part.</h2>
+      <p>Running a model splits in two. <span class="violet">Prefill</span> reads your whole prompt in one parallel pass — lots of math at once, so the GPU's math units are the limit (<span class="strong-ink">compute-bound</span>). <span class="cyan">Decode</span> writes the answer one token at a time, and for <em>every</em> token the GPU must stream <em>all</em> the model's weights out of memory just to take one step. The math is tiny; the memory traffic is huge (<span class="strong-ink">memory-bandwidth-bound</span>). That one re-read is what the whole page is about.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Prefill vs decode</span><span class="rgt"><span class="bneck bn-compute">compute</span><span class="bneck bn-band">bandwidth</span><button class="btn" data-replay="phase"><span class="ico"></span>Replay</button></span></div>
+      <div class="phase-tag" id="phaseTag">idle</div>
+      <div class="phase-cells" id="phaseCells"></div>
+      <div class="metric-row"><span class="lab violet">GPU math units</span><div class="bar-track"><div class="bar-fill" id="mathBar" style="background:linear-gradient(90deg,#7d6ff0,var(--violet))"></div></div><span class="num" id="mathNum">0%</span></div>
+      <div class="metric-row"><span class="lab cyan">Memory bandwidth</span><div class="bar-track"><div class="bar-fill" id="bandBar" style="background:linear-gradient(90deg,#2ea89b,var(--cyan))"></div></div><span class="num" id="bandNum">0%</span></div>
+      <p class="stage-note"><span class="key cyan">THE TELL →</span> &nbsp;During decode the <span class="violet">math</span> bar sits nearly empty while the <span class="cyan">bandwidth</span> bar is pinned at 100%. The GPU is mostly <em>waiting on memory</em>, not computing — so <span class="strong-ink">faster memory</span> helps generation more than faster math.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Generating a token is slow because the model "thinks hard."</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The math for one token is trivial. The cost is physically moving every weight from memory to the compute units — once per token.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 BITS ============ -->
+<section id="bits" data-label="Bits">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">02 / HOW A WEIGHT IS STORED</div>
+      <h2>Every weight is a number — and numbers cost <span class="rose">bits</span></h2>
+      <p>A weight is a floating-point number in three parts: a <span class="amber">sign</span> (±), an <span class="cyan">exponent</span> (roughly how big), and a <span class="rose">mantissa</span> (the precise digits). <span class="mono">fp32</span> spends 32 bits per weight, <span class="mono">fp16</span> 16, <span class="mono">bf16</span> also 16 but trades mantissa precision for more range. Fewer bits = less to store <em>and</em> less to move — and since decode is bottlenecked on moving weights, fewer bits is fewer milliseconds.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>One weight, bit by bit</span><span class="rgt"><span class="bneck bn-cap">capacity</span><span class="bneck bn-band">bandwidth</span></span></div>
+      <div class="segrow" id="bitSeg" style="margin-bottom:20px">
+        <button class="seg active" data-fmt="fp32">fp32</button>
+        <button class="seg" data-fmt="fp16">fp16</button>
+        <button class="seg" data-fmt="bf16">bf16</button>
+        <button class="seg" data-fmt="fp8">fp8</button>
+      </div>
+      <div class="bstrip-wrap">
+        <div class="bzone"><span class="bzone-lab">sign</span><div class="bits" id="bSign"></div></div>
+        <div class="bzone"><span class="bzone-lab">exponent · range</span><div class="bits" id="bExp"></div></div>
+        <div class="bzone"><span class="bzone-lab">mantissa · precision</span><div class="bits" id="bMan"></div></div>
+      </div>
+      <div class="bstrip-wrap" style="margin-top:22px">
+        <div class="bval"><div class="k">the value 0.1 becomes</div><div style="margin-top:6px">0.1 → <span class="stored" id="bStored">0.10000000</span></div></div>
+        <div style="flex:1;min-width:200px">
+          <div class="metric-row" style="grid-template-columns:130px 1fr 70px"><span class="lab rose">bytes / weight</span><div class="bar-track"><div class="bar-fill" id="byteBar" style="background:linear-gradient(90deg,#e85f70,var(--rose))"></div></div><span class="num" id="byteNum">4</span></div>
+        </div>
+      </div>
+      <p class="stage-note"><span class="key rose">RANGE vs PRECISION →</span> &nbsp;<span class="mono">fp16</span> and <span class="mono">bf16</span> are both 16 bits, but bf16 keeps a wide <span class="cyan">exponent</span> (won't overflow) at the cost of a shorter <span class="rose">mantissa</span> (coarser steps). Same size, different trade — that's why training loves bf16.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 QUANTIZATION ============ -->
+<section id="quant" data-label="Quantization">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">03 / FEWER BITS, ALMOST FREE</div>
+      <h2><span class="rose">Quantization</span>: store weights in far fewer bits</h2>
+      <p>Weights don't need full precision — the model shrugs off small rounding. Quantization maps a range of real values onto a small set of evenly spaced <span class="strong-ink">levels</span>: pick a <span class="rose">scale</span>, then round each weight to the nearest level. 8-bit gives 256 levels, 4-bit just 16 — and it still works. A 70-billion-parameter model is ~140 GB in fp16, but ~35 GB in 4-bit: the difference between four GPUs and one.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Quantization mapper · weights snapping to levels</span><span class="rgt"><span class="bneck bn-cap">capacity</span><span class="bneck bn-band">bandwidth</span><button class="btn" data-replay="quant"><span class="ico"></span>Replay</button></span></div>
+      <div class="quant-wrap">
+        <svg class="quant-svg" id="quantSvg" viewBox="0 0 560 380" role="img" aria-label="Weights plotted on a value axis, snapping onto quantization levels"></svg>
+        <div class="quant-side">
+          <div class="segrow" id="quantSeg">
+            <button class="seg" data-bits="16">fp16</button>
+            <button class="seg" data-bits="8">int8</button>
+            <button class="seg active" data-bits="4">int4</button>
+            <button class="seg" data-bits="3">int3</button>
+            <button class="seg" data-bits="2">int2</button>
+          </div>
+          <div class="toggle" id="quantMode" role="group" aria-label="scale granularity">
+            <button class="seg active" data-mode="tensor">one scale (per-tensor)</button>
+            <button class="seg" data-mode="group">per-group scales</button>
+          </div>
+          <div class="toggle" id="quantOut" role="group" aria-label="outlier handling">
+            <button class="seg active" data-out="off">outliers included</button>
+            <button class="seg" data-out="on">protect outliers</button>
+          </div>
+          <div class="k">70B model in memory</div>
+          <div class="tank"><div class="seg-w" id="qTankW"></div><div class="gpu-line"></div></div>
+          <div><span class="qchip ok" id="qMem">35 GB · int4</span> <span class="qchip ok" id="qQual">tiny quality drop</span></div>
+          <div class="k">levels &nbsp;·&nbsp; avg rounding error</div>
+          <div class="metric-row" style="grid-template-columns:1fr;gap:4px;margin-bottom:6px">
+            <div style="font-family:var(--mono);font-size:.9rem;color:var(--ink)"><span id="qLevels">16</span> levels</div>
+          </div>
+          <div class="bar-track" style="height:14px"><div class="bar-fill" id="qErr" style="background:linear-gradient(90deg,var(--amber-deep),var(--rose))"></div></div>
+        </div>
+      </div>
+      <p class="stage-note"><span class="key rose">THE HARD PART →</span> &nbsp;A few giant <span class="rose">outlier</span> weights stretch the range so everyone else crams into a handful of levels. <span class="strong-ink">Per-group scales</span> (a separate scale per small block) and <span class="strong-ink">protecting outliers</span> (keeping the few big ones in high precision — the idea behind GPTQ/AWQ) rescue the precision. Modern low-bit formats: <span class="mono">int4 · nf4 · fp8 · mxfp4 · nvfp4</span>.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">A 4-bit model is a crippled, 4×-worse model.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The <em>memory</em> is 4× smaller; the quality drop is small and non-linear. The weights were never that precise to begin with.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 KV CACHE ============ -->
+<section id="kv" data-label="KV cache">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">04 / DON'T REDO THE PAST</div>
+      <h2>The <span class="cyan">KV cache</span>: remember what you already computed</h2>
+      <p>In attention, each new token needs the <span class="strong-ink">keys and values</span> of every earlier token — and those never change as you generate. So compute each token's K and V <em>once</em> and cache them; each new token then only computes its own and reads the rest. Decode goes from redoing all past work every step to doing just one token's worth. The catch: the cache grows with every token, and at long context it can outweigh the model itself.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Recompute vs cache</span><span class="rgt"><span class="bneck bn-band">saves bandwidth</span><span class="bneck bn-cap">costs capacity</span><button class="btn" data-replay="kv"><span class="ico"></span>Replay</button></span></div>
+      <div class="toggle" id="kvMode" role="group" aria-label="cache mode">
+        <button class="seg active" data-kv="cache">KV cache (compute once)</button>
+        <button class="seg" data-kv="recompute">no cache (recompute)</button>
+      </div>
+      <div class="cellgrid" id="kvGrid" style="grid-template-columns:repeat(12,1fr)"></div>
+      <div class="metric-row" style="grid-template-columns:150px 1fr 110px;margin-top:8px"><span class="lab" id="kvCostLab">work this step</span><div class="costbar"><div class="f" id="kvCost"></div></div><span class="num" id="kvCostNum">low</span></div>
+      <div class="k" style="font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2);margin:22px 0 8px">KV-cache memory (illustrative, 70B-class)</div>
+      <div class="tank"><div class="seg-w" id="kvTankW" style="background:linear-gradient(90deg,#e85f70,var(--rose))"></div><div class="seg-w" id="kvTankKV" style="background:linear-gradient(90deg,#2ea89b,var(--cyan));left:auto"></div><div class="gpu-line"></div></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-family:var(--mono);font-size:11px;color:var(--muted-2)"><span><span style="color:var(--rose)">■</span> weights (int4, 35 GB)</span><span><span style="color:var(--cyan)">■</span> KV cache <span id="kvGbLbl" style="color:var(--cyan)">4 GB</span></span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-top:18px">
+        <div><label class="k" style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2)">context length: <span id="ctxLbl" style="color:var(--ink)">8k</span></label><input type="range" id="ctxRange" min="0" max="4" value="1" aria-label="context length"></div>
+        <div><label class="k" style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2)">concurrent requests: <span id="batchLbl" style="color:var(--ink)">1</span></label><input type="range" id="batchRange" min="1" max="16" value="1" aria-label="concurrent requests"></div>
+      </div>
+      <p class="stage-note"><span class="key cyan">THE NEW PROBLEM →</span> &nbsp;Push context and concurrency up and the <span class="cyan">cache</span> balloons — soon rivalling the weights. That's what the next chapter's <span class="strong-ink">paging</span> and <span class="strong-ink">quantized KV cache</span> exist to tame.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The KV cache stores the text of the conversation.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It stores computed key/value <em>vectors</em>, not tokens — and it grows with context and concurrency, which is why long chats get expensive.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 PAGING & REUSE ============ -->
+<section id="paging" data-label="Paging & reuse">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">05 / MANAGE MEMORY LIKE AN OS</div>
+      <h2><span class="rose">Paged</span> attention &amp; <span class="green">prefix</span> caching</h2>
+      <p>Two problems with the growing cache, two fixes. Reserve each request's <em>maximum</em> cache up front and most of it sits empty — <span class="strong-ink">paged attention</span> (the idea behind vLLM) chops the cache into fixed pages placed wherever there's room, like an OS's virtual memory, so far more requests fit. And when many requests share a prefix — a system prompt, a document, earlier chat turns — <span class="strong-ink">prefix caching</span> computes it once and reuses it.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Paging · fit more requests in the same memory</span><span class="rgt"><span class="bneck bn-cap">capacity</span></span></div>
+      <div class="toggle" id="pageMode" role="group" aria-label="paging mode">
+        <button class="seg active" data-pg="reserve">reserve max</button>
+        <button class="seg" data-pg="paged">paged</button>
+      </div>
+      <div class="cellgrid" id="pageGrid" style="grid-template-columns:repeat(12,1fr)"></div>
+      <div class="reads"><div class="read"><div class="k">requests served</div><div class="v cy" id="pageServed">2</div></div><div class="read"><div class="k">memory wasted</div><div class="v" id="pageWaste">58%</div></div></div>
+    </div>
+    <div class="stage reveal" style="margin-top:22px">
+      <div class="stage-label"><span>Prefix caching · compute the shared part once</span><span class="rgt"><span class="bneck bn-compute">compute</span></span></div>
+      <div class="toggle" id="prefixMode" role="group" aria-label="prefix mode">
+        <button class="seg active" data-px="recompute">recompute each</button>
+        <button class="seg" data-px="cache">prefix cache</button>
+      </div>
+      <div id="prefixRows" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="reads"><div class="read"><div class="k">prefill tokens saved</div><div class="v good" id="prefixSaved">0</div></div></div>
+      <p class="stage-note"><span class="key green">MULTI-TURN →</span> &nbsp;Each new turn of a chat reuses the cache of all previous turns — the shared prefix (system prompt + history) is computed once and simply extended. Paging never changes the answer; it's pure memory management.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 SPECULATIVE DECODING ============ -->
+<section id="spec" data-label="Speculation">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">06 / MANY TOKENS PER STEP</div>
+      <h2><span class="green">Speculative</span> decoding: guess ahead, verify in one pass</h2>
+      <p>Decode's expensive step reads the whole model to make <em>one</em> token — wasteful. So a small fast <span class="amber">draft</span> model proposes several tokens cheaply; the big <span class="rose">target</span> model then checks them <em>all in a single parallel pass</em> and keeps the longest run it agrees with, rejecting from the first disagreement. When the draft is right, you get several tokens for the price of one expensive step — and the output is exactly what the target would have written alone.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Draft → verify → accept / reject</span><span class="rgt"><span class="bneck bn-band">bandwidth</span><button class="btn" data-replay="spec"><span class="ico"></span>Run</button></span></div>
+      <div class="spec-top">
+        <div class="towers">
+          <div class="tower draft" id="towerDraft"></div>
+          <div class="tower target" id="towerTarget"></div>
+        </div>
+        <div>
+          <div class="segrow" style="margin-bottom:10px">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted-2);align-self:center">draft length k:</span>
+            <button class="seg active" data-k="2">2</button><button class="seg" data-k="4">4</button><button class="seg" data-k="6">6</button>
+          </div>
+          <div class="toggle" id="draftQ" role="group" aria-label="draft quality" style="margin:0">
+            <button class="seg active" data-q="good">aligned draft</button>
+            <button class="seg" data-q="weak">weak draft</button>
+          </div>
+        </div>
+      </div>
+      <div class="spec-line" id="specLine"></div>
+      <div class="spec-out">The quick brown fox jumps over the lazy <span id="specOut" style="color:var(--green)"></span></div>
+      <div class="reads">
+        <div class="read"><div class="k">tokens committed</div><div class="v good" id="specCommitted">0</div></div>
+        <div class="read"><div class="k">expensive steps</div><div class="v rose" id="specSteps" style="color:var(--rose)">0</div></div>
+        <div class="read"><div class="k">tokens / step</div><div class="v am" id="specRate">0.0<small>×</small></div></div>
+      </div>
+      <div class="race">
+        <div class="lane"><div class="rl">plain decode — 1 token per expensive step</div><div class="track plain"><div class="f" id="racePlain"></div></div></div>
+        <div class="lane"><div class="rl">speculative — several per step (when the draft agrees)</div><div class="track spec"><div class="f" id="raceSpec"></div></div></div>
+      </div>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The small model's mistakes leak into the answer.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Every token is verified by the target; rejects are thrown away. The text is exactly what the target alone would have written — this is speed, not a quality change.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 BATCHING ============ -->
+<section id="batch" data-label="Batching">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">07 / SHARE THE WEIGHT-READ</div>
+      <h2><span class="cyan">Continuous batching</span>: read the weights once, serve many</h2>
+      <p>One decode step reads the entire model no matter what — so push <em>many</em> requests' tokens through that single read at once, and the expensive weight-read is amortized across everyone. <span class="strong-ink">Static</span> batching wastes it by waiting for the whole batch to finish; <span class="strong-ink">continuous</span> batching swaps a finished request out and a new one in every step, keeping the GPU near 100% busy.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Slots over time · green = a token was produced</span><span class="rgt"><span class="bneck bn-band">throughput</span></span></div>
+      <div class="toggle" id="batchMode" role="group" aria-label="batching mode">
+        <button class="seg active" data-bm="continuous">continuous batching</button>
+        <button class="seg" data-bm="static">static batching</button>
+      </div>
+      <div id="batchGrid" style="display:flex;flex-direction:column;gap:5px"></div>
+      <div class="reads"><div class="read"><div class="k">GPU utilization</div><div class="v cy" id="batchUtil">96%</div></div><div class="read"><div class="k">throughput</div><div class="v good" id="batchTput">~2×</div></div></div>
+      <p class="stage-note"><span class="key cyan">THROUGHPUT ≠ LATENCY →</span> &nbsp;Batching multiplies <em>total</em> tokens/second across users; it doesn't make any single reply arrive sooner. It's the reason a served model can answer thousands of people at once for the same weight-reads.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 MORE TRICKS ============ -->
+<section id="more" data-label="More tricks">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">08 / THE REST OF THE TOOLKIT</div>
+      <h2>Four more ideas, one line each</h2>
+      <p>A quick sweep of the other big levers — each with the bottleneck it beats.</p>
+    </div>
+    <div class="reveal tech-grid">
+      <div class="tech-card">
+        <h4 class="cyan">FlashAttention</h4>
+        <div class="mini" id="miniFlash"></div>
+        <p>Compute attention in small tiles that stay in the GPU's fast on-chip memory, so the huge N×N attention matrix is never written out to slow memory.</p>
+        <div class="beats"><span class="bneck bn-band">beats: bandwidth</span></div>
+      </div>
+      <div class="tech-card">
+        <h4 class="violet">Mixture-of-Experts</h4>
+        <div class="mini" id="miniMoe"></div>
+        <p>Split the feed-forward layer into many experts and route each token to just one or two — huge total capacity, but only a slice of the weights runs per token.</p>
+        <div class="beats"><span class="bneck bn-compute">beats: compute</span><span class="bneck bn-cap">costs: capacity</span></div>
+      </div>
+      <div class="tech-card">
+        <h4 class="green">Distillation</h4>
+        <div class="mini" id="miniDistill"></div>
+        <p>Train a small "student" model to imitate a big "teacher" — much of the quality at a fraction of the size and cost. A genuinely smaller model to run.</p>
+        <div class="beats"><span class="bneck bn-compute">compute</span><span class="bneck bn-band">bandwidth</span><span class="bneck bn-cap">capacity</span></div>
+      </div>
+      <div class="tech-card">
+        <h4 class="amber">Early-exit &amp; cascades</h4>
+        <div class="mini" id="miniExit"></div>
+        <p>Answer easy tokens or queries with cheap computation — fewer layers, or a small model first — and only escalate the hard ones to the full model.</p>
+        <div class="beats"><span class="bneck bn-compute">beats: compute</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 RECAP ============ -->
+<section id="recap" data-label="Recap" style="border-bottom:none">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">09 / THE WHOLE TOOLKIT</div>
+      <h2>Every trick, mapped to the bottleneck it beats</h2>
+      <p>The payoff. <span class="violet">●</span> compute-bound · <span class="cyan">●</span> memory-bandwidth · <span class="rose">●</span> memory-capacity. A dashed <span class="rose">◇</span> marks a cost the trick adds.</p>
+    </div>
+    <div class="reveal matrix-scroll">
+      <table class="matrix">
+        <thead><tr><th>Technique</th><th>Compute</th><th>Bandwidth</th><th>Capacity</th></tr></thead>
+        <tbody id="matrixBody"></tbody>
+      </table>
+    </div>
+
+    <div class="reveal" style="margin-top:30px">
+      <div class="sec-head" style="margin-bottom:18px"><h2 style="font-size:1.4rem">So which do you reach for?</h2></div>
+      <div class="decide">
+        <div class="d"><span class="if">won't fit in memory →</span><span class="then"><b>quantize</b> the weights, or use a <b>Mixture-of-Experts</b> model</span></div>
+        <div class="d"><span class="if">throughput too low →</span><span class="then"><b>continuous batching</b> — amortize the weight-read across many users</span></div>
+        <div class="d"><span class="if">latency too high →</span><span class="then"><b>speculative decoding</b>, and <b>prefix caching</b> for shared prompts</span></div>
+        <div class="d"><span class="if">context too long →</span><span class="then"><b>paged</b> + <b>quantized</b> KV cache to keep the cache in bounds</span></div>
+      </div>
+    </div>
+
+    <div class="reveal recap">
+      <div class="rrow"><div class="rq">quantization</div><div class="ra">Storing weights in fewer bits by rounding them onto a small set of <b>levels</b> (scale + zero-point). 4-bit ≈ ¼ the memory.</div></div>
+      <div class="rrow"><div class="rq">per-group scales</div><div class="ra">A separate scale for each small block of weights, so a few outliers can't blow the precision for everyone.</div></div>
+      <div class="rrow"><div class="rq">PTQ vs QAT</div><div class="ra">Quantize a finished model (post-training) vs train it to expect the rounding (quantization-aware) — more work, better at very low bits.</div></div>
+      <div class="rrow"><div class="rq">KV cache</div><div class="ra">Cached key/value vectors of past tokens so decode does one token's work per step, not the whole sequence's. Grows with context.</div></div>
+      <div class="rrow"><div class="rq">paged attention</div><div class="ra">Manage the KV cache in fixed pages like OS memory, so it doesn't fragment and far more requests fit (vLLM).</div></div>
+      <div class="rrow"><div class="rq">prefix caching</div><div class="ra">Reuse the computed cache of a shared prompt prefix instead of re-running prefill for every request.</div></div>
+      <div class="rrow"><div class="rq">speculative decoding</div><div class="ra">A small <b>draft</b> proposes tokens; the big <b>target</b> verifies them in one pass. Several tokens per expensive step, identical output.</div></div>
+      <div class="rrow"><div class="rq">continuous batching</div><div class="ra">Add and drop requests every step so one weight-read serves a full batch. Multiplies <b>throughput</b>, not single-request latency.</div></div>
+      <div class="rrow"><div class="rq">FlashAttention</div><div class="ra">Tile attention so the big score matrix never touches slow memory — a bandwidth win with identical math.</div></div>
+      <div class="rrow"><div class="rq">mixture-of-experts</div><div class="ra">Many expert sub-networks, only a couple active per token. Big total capacity, small per-token compute.</div></div>
+      <div class="rrow"><div class="rq">distillation</div><div class="ra">A small student trained to match a big teacher's outputs — a smaller model that keeps much of the quality.</div></div>
+    </div>
+
+    <div class="myth reveal" style="margin-top:26px">
+      <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">These tricks make the model dumber to make it faster.</span></div>
+      <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Most are lossless or nearly so. They change <em>how</em> the same computation is scheduled and stored — not <em>what</em> the model says.</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="mono" style="letter-spacing:.14em;color:var(--muted)">END OF PART 2</div>
+    <div>A visual tour of how large language models are served fast and cheap. Numbers (GB, tokens/step, %) are simplified for intuition — real systems vary, but the shape of the ideas is exactly this.</div>
+    <div style="margin-top:6px"><a href="/tools/llm-visual-course.html">← Part 1: How LLMs Work</a> &nbsp;·&nbsp; <a href="/">back to tbash.cc</a></div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $=(s,e)=>(e||document).querySelector(s);
+  const $$=(s,e)=>Array.from((e||document).querySelectorAll(s));
+  const svgEl=(t,a)=>{const e=document.createElementNS('http://www.w3.org/2000/svg',t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+
+  /* progress + rail */
+  const pf=$('#progressFill');
+  const onScroll=()=>{const h=document.documentElement;const m=h.scrollHeight-h.clientHeight;pf.style.width=(m>0?h.scrollTop/m*100:0)+'%';};
+  document.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+  const secs=$$('section[data-label]'), rail=$('#rail');
+  secs.forEach(s=>{const a=document.createElement('a');a.href='#'+s.id;a.innerHTML='<span class="lbl">'+s.dataset.label+'</span>';a.setAttribute('aria-label',s.dataset.label);rail.appendChild(a);});
+  const railLinks=$$('a',rail);
+  const railObs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){const i=secs.indexOf(e.target);railLinks.forEach((l,j)=>l.classList.toggle('on',j===i));}}),{threshold:.5});
+  secs.forEach(s=>railObs.observe(s));
+
+  /* hero ambient */
+  (function(){const host=$('#ambient');if(!host||reduce)return;const words=['int4','fp8','KV cache','draft','verify','nf4','paged','MoE','scale','bandwidth','batch','distill'];for(let i=0;i<9;i++){const c=document.createElement('div');c.className='chip-drift';c.textContent=words[i%words.length];c.style.top=(8+Math.random()*84)+'%';c.style.animationDuration=(13+Math.random()*12)+'s';c.style.animationDelay=(-Math.random()*20)+'s';c.style.fontSize=(11+Math.random()*3)+'px';host.appendChild(c);}})();
+
+  /* reveal */
+  const revObs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in');}),{threshold:.14});
+  $$('.reveal').forEach(el=>revObs.observe(el));
+
+  /* ===== 01 phase meter ===== */
+  const phaseCells=$('#phaseCells'),phaseTag=$('#phaseTag'),mathBar=$('#mathBar'),bandBar=$('#bandBar'),mathNum=$('#mathNum'),bandNum=$('#bandNum');
+  let phaseTimers=[];
+  function setBars(m,b){mathBar.style.width=m+'%';bandBar.style.width=b+'%';mathNum.textContent=m+'%';bandNum.textContent=b+'%';}
+  function runPhase(){
+    phaseTimers.forEach(clearTimeout);phaseTimers=[];phaseCells.innerHTML='';
+    const PRE=8,DEC=14;
+    for(let i=0;i<PRE;i++){const c=document.createElement('div');c.className='pcell';c.dataset.t='pre';phaseCells.appendChild(c);}
+    for(let i=0;i<DEC;i++){const c=document.createElement('div');c.className='pcell';c.dataset.t='dec';phaseCells.appendChild(c);}
+    const cells=$$('.pcell',phaseCells);
+    phaseTag.textContent='PREFILL — reading the whole prompt at once (compute-bound)';
+    setBars(0,0);
+    if(reduce){cells.forEach(c=>c.classList.add(c.dataset.t));setBars(15,100);phaseTag.textContent='decode — one token at a time (bandwidth-bound)';return;}
+    phaseTimers.push(setTimeout(()=>{cells.slice(0,PRE).forEach(c=>c.classList.add('pre'));setBars(95,30);},250));
+    let t=1100;
+    phaseTimers.push(setTimeout(()=>{phaseTag.textContent='DECODE — one token at a time (memory-bandwidth-bound)';setBars(15,100);},t));
+    for(let i=0;i<DEC;i++){phaseTimers.push(setTimeout(()=>{cells[PRE+i].classList.add('dec');},t+200+i*180));}
+  }
+
+  /* ===== 02 bit strip ===== */
+  const fmts={fp32:{s:1,e:8,m:23,bytes:4,val:'0.10000000149'},fp16:{s:1,e:5,m:10,bytes:2,val:'0.0999755859'},bf16:{s:1,e:8,m:7,bytes:2,val:'0.1000976562'},fp8:{s:1,e:4,m:3,bytes:1,val:'0.101562'}};
+  const bSign=$('#bSign'),bExp=$('#bExp'),bMan=$('#bMan'),bStored=$('#bStored'),byteBar=$('#byteBar'),byteNum=$('#byteNum');
+  function fillBits(host,n,cls){host.innerHTML='';for(let i=0;i<n;i++){const d=document.createElement('div');d.className='bcell '+cls;host.appendChild(d);}}
+  function setFmt(f){
+    const o=fmts[f];fillBits(bSign,o.s,'sign');fillBits(bExp,o.e,'exp');fillBits(bMan,o.m,'man');
+    bStored.textContent=o.val;byteNum.textContent=o.bytes;byteBar.style.width=(o.bytes/4*100)+'%';
+    $$('#bitSeg .seg').forEach(b=>b.classList.toggle('active',b.dataset.fmt===f));
+  }
+  $$('#bitSeg .seg').forEach(b=>b.addEventListener('click',()=>setFmt(b.dataset.fmt)));
+
+  /* ===== 03 quantization ===== */
+  const quantSvg=$('#quantSvg');
+  const QW=560,QH=380,QPAD=34,VMAX=4.2;
+  // deterministic weights: 64 values, group3 (idx 48-63) holds outliers
+  const weights=(function(){let s=20240815;const r=()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};const a=[];for(let i=0;i<64;i++)a.push((r()*2-1)*0.55);a[50]=3.8;a[55]=-3.1;return a;})();
+  const OUTLIERS=[50,55];
+  let qBits=4,qModeV='tensor',qOutV='off';
+  const yOf=v=>QPAD+(VMAX-v)/(2*VMAX)*(QH-2*QPAD);
+  function groupRange(idxs){let mn=Infinity,mx=-Infinity;idxs.forEach(i=>{if(qOutV==='on'&&OUTLIERS.includes(i))return;mn=Math.min(mn,weights[i]);mx=Math.max(mx,weights[i]);});if(mn===Infinity){mn=-0.6;mx=0.6;}return[mn,mx];}
+  function levelsFor(mn,mx){const L=Math.pow(2,qBits);const step=(mx-mn)/(L-1||1);return{L,mn,mx,step};}
+  function snap(v,lv){if(qBits>=16)return v;const k=Math.round((v-lv.mn)/(lv.step||1));const q=lv.mn+k*(lv.step||0);return q;}
+  function drawQuant(animate){
+    if(!quantSvg)return;
+    quantSvg.innerHTML='';
+    // axis
+    quantSvg.appendChild(svgEl('line',{x1:QPAD,y1:QPAD-8,x2:QPAD,y2:QH-QPAD+8,stroke:'rgba(140,160,210,.3)','stroke-width':1}));
+    quantSvg.appendChild(svgEl('line',{x1:QPAD,y1:yOf(0),x2:QW-16,y2:yOf(0),stroke:'rgba(140,160,210,.18)','stroke-width':1,'stroke-dasharray':'3 4'}));
+    // groups
+    const groups = qModeV==='group' ? [[0,16],[16,32],[32,48],[48,64]] : [[0,64]];
+    const plotX0=QPAD+14, plotX1=QW-16, plotW=plotX1-plotX0;
+    let totErr=0,errN=0;
+    groups.forEach((g,gi)=>{
+      const idxs=[];for(let i=g[0];i<g[1];i++)idxs.push(i);
+      const bx0=plotX0+(plotW*gi/groups.length), bw=plotW/groups.length;
+      const [mn,mx]=groupRange(idxs);
+      const lv=levelsFor(mn,mx);
+      // gridlines (levels) — draw if not too many
+      if(qBits<16 && lv.L<=32){
+        for(let k=0;k<lv.L;k++){const val=mn+k*lv.step;const y=yOf(val);
+          quantSvg.appendChild(svgEl('line',{x1:bx0+2,y1:y,x2:bx0+bw-4,y2:y,stroke:'rgba(255,122,138,.32)','stroke-width':1}));}
+      } else if(qBits<16){
+        // dense grid, representative
+        for(let k=0;k<=24;k++){const val=mn+(mx-mn)*k/24;const y=yOf(val);
+          quantSvg.appendChild(svgEl('line',{x1:bx0+2,y1:y,x2:bx0+bw-4,y2:y,stroke:'rgba(255,122,138,.14)','stroke-width':1}));}
+      }
+      // dots
+      idxs.forEach((i,li)=>{
+        const v=weights[i];
+        const isOut=OUTLIERS.includes(i);
+        const protectedOut = isOut && qOutV==='on';
+        const x=bx0+ (bw)*((li+0.5)/idxs.length);
+        const yTrue=yOf(v);
+        let yq=yTrue,q=v;
+        if(qBits<16 && !protectedOut){q=snap(v,lv);yq=yOf(q);totErr+=Math.abs(v-q);errN++;}
+        else if(!protectedOut){errN++;}
+        // ghost + connector
+        if(qBits<16 && Math.abs(yq-yTrue)>0.6 && !protectedOut){
+          quantSvg.appendChild(svgEl('circle',{cx:x,cy:yTrue,r:2.5,fill:'rgba(147,161,196,.35)'}));
+          quantSvg.appendChild(svgEl('line',{x1:x,y1:yTrue,x2:x,y2:yq,stroke:'rgba(255,180,84,.5)','stroke-width':1}));
+        }
+        const col= protectedOut ? '#43d6c8' : (isOut?'#ffb454':'#ff7a8a');
+        const dot=svgEl('circle',{cx:x,cy:animate?yTrue:yq,r:4,fill:col,opacity:.95});
+        quantSvg.appendChild(dot);
+        if(animate&&!reduce&&qBits<16&&!protectedOut){dot.style.transition='none';requestAnimationFrame(()=>{dot.style.transition='cy .6s cubic-bezier(.2,.8,.2,1)';dot.setAttribute('cy',yq);});}
+      });
+    });
+    // readouts
+    const L=Math.pow(2,qBits);
+    $('#qLevels').textContent=qBits>=16?'~continuous':L.toLocaleString();
+    const mem={16:140,8:70,4:35,3:26,2:17.5}[qBits];
+    $('#qMem').textContent=mem+' GB · '+(qBits>=16?'fp16':'int'+qBits);
+    $('#qTankW').style.width=(mem/245*100)+'%';
+    const avg=errN?totErr/errN:0;
+    $('#qErr').style.width=Math.min(100,avg/0.6*100).toFixed(0)+'%';
+    // quality chip
+    const qc=$('#qQual');qc.className='qchip';
+    let cls='ok',txt='indistinguishable';
+    if(qBits>=8){cls='ok';txt=qBits>=16?'full precision':'indistinguishable';}
+    else if(qBits===4){cls='ok';txt='tiny quality drop';}
+    else if(qBits===3){cls='mid';txt='noticeable';}
+    else {cls='bad';txt='breaks down';}
+    if(qModeV==='group'&&qBits<=4&&qBits>=3){cls='ok';txt=(qBits===3?'usable with per-group':'crisp with per-group');}
+    qc.classList.add(cls);qc.textContent=txt;
+    $$('#quantSeg .seg').forEach(b=>b.classList.toggle('active',+b.dataset.bits===qBits));
+    $$('#quantMode .seg').forEach(b=>b.classList.toggle('active',b.dataset.mode===qModeV));
+    $$('#quantOut .seg').forEach(b=>b.classList.toggle('active',b.dataset.out===qOutV));
+  }
+  $$('#quantSeg .seg').forEach(b=>b.addEventListener('click',()=>{qBits=+b.dataset.bits;drawQuant(true);}));
+  $$('#quantMode .seg').forEach(b=>b.addEventListener('click',()=>{qModeV=b.dataset.mode;drawQuant(true);}));
+  $$('#quantOut .seg').forEach(b=>b.addEventListener('click',()=>{qOutV=b.dataset.out;drawQuant(true);}));
+
+  /* ===== 04 KV cache ===== */
+  const kvGrid=$('#kvGrid');let kvMode='cache';const KV_N=36;let kvTimers=[];
+  function buildKvShell(){kvGrid.innerHTML='';for(let i=0;i<KV_N;i++){const c=document.createElement('div');c.className='gcell';kvGrid.appendChild(c);}}
+  function runKv(){
+    kvTimers.forEach(clearTimeout);kvTimers=[];
+    const cells=$$('.gcell',kvGrid);cells.forEach(c=>c.className='gcell');
+    const cost=$('#kvCost'),costNum=$('#kvCostNum'),costLab=$('#kvCostLab');
+    if(reduce){cells.forEach(c=>c.classList.add('kv'));cost.style.width='40%';costNum.textContent='low';return;}
+    let step=0;const total=KV_N;
+    const tick=()=>{
+      if(step>=total)return;
+      if(kvMode==='cache'){
+        for(let i=0;i<step;i++)cells[i].className='gcell kv';
+        cells[step].className='gcell newkv';
+        cost.style.width='16%';costNum.textContent='low (1 token)';costLab.textContent='work this step';
+      }else{
+        for(let i=0;i<=step;i++)cells[i].className='gcell newkv';
+        setTimeout(()=>{for(let i=0;i<=step;i++)if(cells[i])cells[i].className='gcell kv';},260);
+        cost.style.width=Math.min(100,(step+1)/total*100)+'%';costNum.textContent='redo '+(step+1);costLab.textContent='work this step';
+      }
+      step++;kvTimers.push(setTimeout(tick,300));
+    };
+    tick();
+  }
+  const ctxRange=$('#ctxRange'),batchRange=$('#batchRange');
+  const ctxVals=[2,8,32,64,128],ctxTok=[2000,8000,32000,64000,128000];
+  function updateKvTank(){
+    const ci=+ctxRange.value,b=+batchRange.value;
+    $('#ctxLbl').textContent=ctxVals[ci]+'k';$('#batchLbl').textContent=b;
+    const kvGb=Math.min(180, ctxTok[ci]*b*0.0005);
+    $('#kvGbLbl').textContent=kvGb.toFixed(1)+' GB';
+    const total=245; // tank scale (GB)
+    const wPct=35/total*100;
+    $('#kvTankW').style.width=wPct+'%';
+    const kv=$('#kvTankKV');kv.style.left=wPct+'%';kv.style.width=Math.min(100-wPct,kvGb/total*100)+'%';
+  }
+  ctxRange.addEventListener('input',updateKvTank);batchRange.addEventListener('input',updateKvTank);
+  $$('#kvMode .seg').forEach(b=>b.addEventListener('click',()=>{kvMode=b.dataset.kv;$$('#kvMode .seg').forEach(x=>x.classList.toggle('active',x===b));runKv();}));
+
+  /* ===== 05 paging + prefix ===== */
+  const pageGrid=$('#pageGrid');const PG_COLS=12,PG_ROWS=6,PG_N=PG_COLS*PG_ROWS;
+  const reqs=[{len:6,c:'r1'},{len:4,c:'r2'},{len:8,c:'r3'},{len:3,c:'r4'},{len:5,c:'r5'}];
+  let pgMode='reserve';
+  function buildPage(){
+    pageGrid.innerHTML='';for(let i=0;i<PG_N;i++){const c=document.createElement('div');c.className='gcell';pageGrid.appendChild(c);}
+    const cells=$$('.gcell',pageGrid);
+    let served=0,used=0;
+    if(pgMode==='reserve'){
+      // each request reserves a full row (max 12), fits PG_ROWS rows but we show first ~2 filling before "full"
+      const RES=12;let idx=0;
+      for(let r=0;r<PG_ROWS&&served<reqs.length;r++){
+        const req=reqs[served];
+        for(let k=0;k<RES;k++){const ci=r*PG_COLS+k;if(k<req.len){cells[ci].className='gcell '+req.c;used++;}else{cells[ci].className='gcell reserved';}}
+        served++;
+      }
+      $('#pageServed').textContent=served; // 5 rows -> but reserve wastes; show served that fit
+      // reserve fits only PG_ROWS=6 rows but each wastes; here all 5 fit rows but heavily wasted
+      const waste=Math.round((PG_N - used)/PG_N*100);
+      $('#pageWaste').textContent=waste+'%';
+      $('#pageServed').textContent=Math.min(reqs.length, PG_ROWS)+' (rows exhausted)';
+    }else{
+      // paged: pack tightly
+      let idx=0;let s=0;
+      for(let ri=0;ri<reqs.length;ri++){const req=reqs[ri];for(let k=0;k<req.len;k++){if(idx<PG_N){cells[idx].className='gcell '+req.c;idx++;used++;}}s++;}
+      // add a couple more requests to show more fit
+      const extra=[{len:6,c:'r1'},{len:4,c:'r2'}];extra.forEach(req=>{for(let k=0;k<req.len;k++){if(idx<PG_N){cells[idx].className='gcell '+req.c;idx++;used++;}}});
+      served=reqs.length+2;
+      $('#pageServed').textContent=served;
+      $('#pageWaste').textContent=Math.round((PG_N-used)/PG_N*100)+'%';
+    }
+    $$('#pageMode .seg').forEach(b=>b.classList.toggle('active',b.dataset.pg===pgMode));
+  }
+  $$('#pageMode .seg').forEach(b=>b.addEventListener('click',()=>{pgMode=b.dataset.pg;buildPage();}));
+
+  const prefixRows=$('#prefixRows');let pxMode='recompute';
+  const pxReqs=[{prefix:8,tail:3},{prefix:8,tail:5},{prefix:8,tail:2}];
+  function buildPrefix(){
+    prefixRows.innerHTML='';let saved=0;
+    pxReqs.forEach((r,ri)=>{
+      const row=document.createElement('div');row.className='cellgrid';row.style.gridTemplateColumns='repeat(16,1fr)';
+      for(let i=0;i<r.prefix+r.tail;i++){
+        const c=document.createElement('div');c.className='gcell';
+        if(i<r.prefix){
+          if(pxMode==='cache'){ if(ri===0){c.className='gcell shared';} else {c.className='gcell skip';saved++;} }
+          else {c.className='gcell shared';}
+        } else { c.className='gcell tail'; }
+        row.appendChild(c);
+      }
+      prefixRows.appendChild(row);
+    });
+    $('#prefixSaved').textContent=(pxMode==='cache'?saved:0);
+    $$('#prefixMode .seg').forEach(b=>b.classList.toggle('active',b.dataset.px===pxMode));
+  }
+  $$('#prefixMode .seg').forEach(b=>b.addEventListener('click',()=>{pxMode=b.dataset.px;buildPrefix();}));
+
+  /* ===== 06 speculative decoding ===== */
+  const target=['dog','.','She','was','a','clever','fox',',','quick','and','quiet','.','∎'];
+  // match pattern per position: does the draft's guess match target?
+  const matchGood=[1,1,1,0, 1,1,1,1, 1,1,0,1, 1];
+  const matchWeak=[1,0,1,0,1,0,0,1,0,1,0,1,1];
+  const wrongWords=['cat','!','He','were','the','lazy','dog','…','slow','or','loud','?','·'];
+  const specLine=$('#specLine'),specOut=$('#specOut'),towerDraft=$('#towerDraft'),towerTarget=$('#towerTarget');
+  let specK=2,specQ='good',specTimers=[];
+  function buildTowers(){towerDraft.innerHTML='';towerTarget.innerHTML='';for(let i=0;i<3;i++){const s=document.createElement('div');s.className='tslab';towerDraft.appendChild(s);}for(let i=0;i<8;i++){const s=document.createElement('div');s.className='tslab';towerTarget.appendChild(s);}
+    towerDraft.insertAdjacentHTML('beforeend','<div class="tlab">draft<br>small · fast</div>');towerTarget.insertAdjacentHTML('beforeend','<div class="tlab">target<br>big · slow</div>');}
+  function runSpec(){
+    specTimers.forEach(clearTimeout);specTimers=[];specLine.innerHTML='';specOut.textContent='';
+    const match=specQ==='good'?matchGood:matchWeak;
+    let pos=0,committed=0,steps=0,out=[];
+    $('#specCommitted').textContent='0';$('#specSteps').textContent='0';$('#specRate').innerHTML='0.0<small>×</small>';
+    $('#racePlain').style.width='0';$('#raceSpec').style.width='0';
+    const chip=(txt,cls)=>{const s=document.createElement('span');s.className='tok '+cls;s.textContent=txt;return s;};
+    const totalTokens=target.length;
+    const doStep=()=>{
+      if(pos>=totalTokens){finish();return;}
+      steps++;
+      specLine.innerHTML='';
+      const k=Math.min(specK,totalTokens-pos);
+      // propose
+      const proposed=[];
+      for(let j=0;j<k;j++){const gi=pos+j;const ok=match[gi]===1;proposed.push(ok?target[gi]:wrongWords[gi%wrongWords.length]);}
+      // accepted = consecutive matches
+      let acc=0;for(let j=0;j<k;j++){if(match[pos+j]===1)acc++;else break;}
+      const allMatch=acc===k;
+      // render proposal as draft chips
+      proposed.forEach((w,j)=>{const c=chip(w,'draft');specLine.appendChild(c);
+        specTimers.push(setTimeout(()=>{},0));});
+      // reveal verify after a beat
+      const revealDelay=reduce?0:120*k+220;
+      specTimers.push(setTimeout(()=>{
+        const chips=$$('.tok',specLine);
+        chips.forEach((c,j)=>{
+          if(j<acc){c.className='tok accepted';}
+          else if(j===acc){c.className='tok rejected';}
+          else {c.style.opacity='.25';}
+        });
+        // committed tokens: accepted + (1 fill if rejected within k) or (+1 bonus if all matched)
+        let gained=acc;let addFilled=null;
+        if(!allMatch){addFilled=target[pos+acc];gained=acc+1;}
+        else{addFilled=(pos+k<totalTokens)?target[pos+k]:null;gained=acc+(addFilled?1:0);}
+        // show filled token
+        specTimers.push(setTimeout(()=>{
+          if(addFilled){const fc=chip(addFilled,'filled');specLine.appendChild(fc);}
+          for(let j=0;j<gained;j++){out.push(target[pos+j]);}
+          committed+=gained;pos+=gained;
+          specOut.textContent=out.join(' ').replace(/ ([.,])/g,'$1');
+          $('#specCommitted').textContent=committed;
+          $('#specSteps').textContent=steps;
+          $('#specRate').innerHTML=(committed/steps).toFixed(1)+'<small>×</small>';
+          $('#racePlain').style.width=Math.min(100,steps/totalTokens*100)+'%';
+          $('#raceSpec').style.width=Math.min(100,committed/totalTokens*100)+'%';
+          specTimers.push(setTimeout(doStep,reduce?0:520));
+        },reduce?0:360));
+      },revealDelay));
+    };
+    const finish=()=>{ $('#racePlain').style.width=Math.min(100,steps/totalTokens*100)+'%'; };
+    if(reduce){
+      // static: compute final numbers
+      let p=0,c=0,st=0;const o=[];
+      while(p<totalTokens){st++;const k=Math.min(specK,totalTokens-p);let a=0;for(let j=0;j<k;j++){if(match[p+j]===1)a++;else break;}let g=(a===k)?a+((p+k<totalTokens)?1:0):a+1;for(let j=0;j<g;j++)o.push(target[p+j]);c+=g;p+=g;}
+      out.push(...o);specOut.textContent=o.join(' ').replace(/ ([.,])/g,'$1');
+      $('#specCommitted').textContent=c;$('#specSteps').textContent=st;$('#specRate').innerHTML=(c/st).toFixed(1)+'<small>×</small>';
+      $('#raceSpec').style.width='100%';$('#racePlain').style.width=Math.min(100,st/totalTokens*100)+'%';
+      return;
+    }
+    doStep();
+  }
+  $$('[data-k]').forEach(b=>b.addEventListener('click',()=>{specK=+b.dataset.k;$$('[data-k]').forEach(x=>x.classList.toggle('active',x===b));runSpec();}));
+  $$('#draftQ .seg').forEach(b=>b.addEventListener('click',()=>{specQ=b.dataset.q;$$('#draftQ .seg').forEach(x=>x.classList.toggle('active',x===b));runSpec();}));
+
+  /* ===== 07 batching ===== */
+  const batchGrid=$('#batchGrid');let bMode='continuous';const B_ROWS=4,B_COLS=20;
+  function buildBatch(){
+    batchGrid.innerHTML='';
+    // request lengths per slot start
+    const colors=['a','b','c','d','a','b','c','d'];
+    for(let r=0;r<B_ROWS;r++){
+      const row=document.createElement('div');row.className='batch-grid';row.style.gridTemplateColumns='repeat('+B_COLS+',1fr)';
+      const runs=[];
+      if(bMode==='static'){
+        // all start at 0, finish at staggered lengths, then idle until batch resets at max
+        const len=[20,8,12,6][r];
+        for(let c=0;c<B_COLS;c++){const cell=document.createElement('div');cell.className='bg-cell '+(c<len?colors[r]:'idle');row.appendChild(cell);}
+      }else{
+        // continuous: keep filling; when a run ends, new colored run begins
+        let c=0,ci=r;const lens=[[7,6,7],[5,4,6,5],[9,5,6],[4,6,4,6]][r];
+        let li=0,cur=lens[0],start=0,colorIdx=r;
+        for(let c2=0;c2<B_COLS;c2++){const cell=document.createElement('div');
+          if(c2-start>=cur){start=c2;li++;colorIdx++;cur=lens[li%lens.length];}
+          cell.className='bg-cell '+colors[colorIdx%4];row.appendChild(cell);}
+      }
+      batchGrid.appendChild(row);
+    }
+    if(bMode==='static'){$('#batchUtil').textContent='54%';$('#batchTput').textContent='~1×';}
+    else{$('#batchUtil').textContent='96%';$('#batchTput').textContent='~2×';}
+    $$('#batchMode .seg').forEach(b=>b.classList.toggle('active',b.dataset.bm===bMode));
+  }
+  $$('#batchMode .seg').forEach(b=>b.addEventListener('click',()=>{bMode=b.dataset.bm;buildBatch();}));
+
+  /* ===== 08 mini diagrams ===== */
+  function miniFlash(){const el=$('#miniFlash');el.innerHTML='<svg width="150" height="60" viewBox="0 0 150 60"><rect x="8" y="8" width="44" height="44" fill="none" stroke="#5b6b93" stroke-width="1.2"/><line x1="8" y1="8" x2="52" y2="52" stroke="#ff7a8a" stroke-width="1.5"/><line x1="52" y1="8" x2="8" y2="52" stroke="#ff7a8a" stroke-width="1.5"/><text x="30" y="59" fill="#657297" font-size="8" font-family="monospace" text-anchor="middle">N×N matrix</text><rect x="86" y="20" width="16" height="16" fill="#43d6c8" opacity=".8"/><rect x="106" y="20" width="16" height="16" fill="none" stroke="#43d6c8"/><text x="108" y="52" fill="#43d6c8" font-size="8" font-family="monospace" text-anchor="middle">tiles →</text></svg>';}
+  function miniMoe(){const el=$('#miniMoe');let h='<div style="text-align:center"><div style="font-family:var(--mono);font-size:9px;color:#657297;margin-bottom:6px">1 token → 2 of 8 experts</div>';const on=[2,5];for(let i=0;i<8;i++)h+='<span class="expert'+(on.includes(i)?' on':'')+'"></span>';h+='</div>';el.innerHTML=h;}
+  function miniDistill(){const el=$('#miniDistill');el.innerHTML='<svg width="150" height="60" viewBox="0 0 150 60"><g>'+[0,1,2,3,4].map((n,i)=>'<rect x="18" y="'+(8+i*9)+'" width="34" height="6" rx="2" fill="rgba(255,122,138,.5)"/>').join('')+[0,1].map((n,i)=>'<rect x="104" y="'+(20+i*9)+'" width="28" height="6" rx="2" fill="rgba(110,231,135,.6)"/>').join('')+'<line x1="56" y1="30" x2="100" y2="30" stroke="#6ee787" stroke-width="1.5" marker-end="url(#a)"/><text x="35" y="59" fill="#657297" font-size="8" font-family="monospace" text-anchor="middle">teacher</text><text x="118" y="59" fill="#6ee787" font-size="8" font-family="monospace" text-anchor="middle">student</text></g></svg>';}
+  function miniExit(){const el=$('#miniExit');el.innerHTML='<svg width="150" height="60" viewBox="0 0 150 60"><rect x="10" y="24" width="24" height="14" rx="3" fill="none" stroke="#657297"/><path d="M40 31 h20" stroke="#657297" stroke-width="1.2"/><circle cx="70" cy="31" r="8" fill="none" stroke="#ffb454"/><path d="M78 31 h14" stroke="#6ee787" stroke-width="1.2"/><text x="104" y="27" fill="#6ee787" font-size="8" font-family="monospace">easy → exit</text><path d="M70 39 v10 h30" stroke="#ff7a8a" stroke-width="1.2" fill="none"/><text x="104" y="54" fill="#ff7a8a" font-size="8" font-family="monospace">hard → full</text></svg>';}
+
+  /* ===== 09 matrix ===== */
+  const matrixRows=[
+    ['Quantization',['','cost','hit']],
+    ['KV cache',['','hit','cost']],
+    ['Paged attention',['','','hit']],
+    ['Prefix caching',['hit','','']],
+    ['Speculative decoding',['','hit','']],
+    ['Continuous batching',['','hit','']],
+    ['FlashAttention',['','hit','']],
+    ['Mixture-of-Experts',['hit','hit','cost']],
+    ['Distillation',['hit','hit','hit']],
+    ['Early-exit / cascade',['hit','','']]
+  ];
+  function buildMatrix(){
+    const body=$('#matrixBody');if(!body)return;const kinds=['compute','band','cap'];
+    body.innerHTML=matrixRows.map(r=>{
+      return '<tr><th>'+r[0]+'</th>'+r[1].map((v,i)=>{
+        if(v==='hit')return '<td><span class="dotb hit '+kinds[i]+'"></span></td>';
+        if(v==='cost')return '<td><span class="dotb cost"></span></td>';
+        return '<td></td>';
+      }).join('')+'</tr>';
+    }).join('');
+  }
+
+  /* ===== triggers ===== */
+  const runners={slow:runPhase,quant:()=>drawQuant(true),kv:runKv,spec:runSpec};
+  const secObs=new IntersectionObserver(es=>es.forEach(e=>{const id=e.target.id;if(e.isIntersecting&&runners[id])runners[id]();}),{threshold:.3});
+  ['slow','quant','kv','spec'].forEach(id=>{const el=$('#'+id);if(el)secObs.observe(el);});
+
+  $$('[data-replay]').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.replay;
+    if(k==='phase')runPhase();
+    if(k==='quant')drawQuant(true);
+    if(k==='kv')runKv();
+    if(k==='spec')runSpec();
+  }));
+
+  /* init */
+  setFmt('fp32');
+  drawQuant(false);
+  buildKvShell();updateKvTank();runKv();
+  buildPage();buildPrefix();
+  buildTowers();runSpec();
+  buildBatch();
+  miniFlash();miniMoe();miniDistill();miniExit();
+  buildMatrix();
+})();
+</script>
+</body>
+</html>
