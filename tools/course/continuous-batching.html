@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Continuous Batching — LLM Visual Course</title>
+<meta name="description" content="One decode step reads the whole model no matter how many requests ride along — so packing many requests multiplies throughput, not latency. Toggle static vs continuous batching and watch GPU utilization and throughput recompute live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* segmented mode toggle */
+  .seg-row{display:flex;justify-content:center;margin:2px 0 18px}
+  .seg-wrap{display:inline-flex;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px}
+  .seg{font-family:var(--mono);font-size:12.5px;letter-spacing:.02em;color:var(--muted);background:transparent;border:0;border-radius:8px;padding:8px 16px;cursor:pointer;transition:.16s}
+  .seg:hover{color:var(--ink)}
+  .seg.active{background:rgba(110,231,135,.14);color:var(--green);box-shadow:0 0 0 1px rgba(110,231,135,.3) inset}
+  .seg:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+  /* editable decode lengths */
+  .len-row{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;margin:0 0 20px}
+  .len-cell{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .len-cell .lc-lab{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--muted-2)}
+  .len-cell .lc-lab .dotmark{display:inline-block;width:9px;height:9px;border-radius:3px;vertical-align:middle;margin-right:4px}
+  .len-in{width:62px;font-family:var(--mono);font-size:14px;text-align:center;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:7px 6px}
+  .len-in:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 1px rgba(110,231,135,.3) inset}
+  .len-hint{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);text-align:center;margin:-10px 0 20px}
+
+  /* batch timeline */
+  .tl-wrap{border:1px solid var(--line);border-radius:12px;background:var(--bg-2);padding:14px 16px 16px}
+  .tl-axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted-2);margin-bottom:8px}
+  .slot-row{display:grid;grid-template-columns:44px 1fr;gap:9px;align-items:center;margin-bottom:5px}
+  .slot-lab{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);text-align:right}
+  .batch-grid{display:grid;gap:3px}
+  .bg-cell{height:19px;border-radius:3px;background:var(--bg-2);border:1px solid var(--line);transition:background .2s,border-color .2s}
+  .bg-cell.idle{background:repeating-linear-gradient(45deg,rgba(140,160,210,.09) 0 5px,transparent 5px 10px);border-color:var(--line)}
+  .bg-cell.a{background:rgba(157,140,255,.62);border-color:var(--violet)}
+  .bg-cell.b{background:rgba(67,214,200,.6);border-color:var(--cyan)}
+  .bg-cell.c{background:rgba(255,180,84,.6);border-color:var(--amber)}
+  .bg-cell.d{background:rgba(255,122,138,.6);border-color:var(--rose)}
+  .bg-cell.e{background:rgba(110,231,135,.62);border-color:var(--green)}
+  .bg-cell.f{background:rgba(140,160,210,.5);border-color:var(--line-strong)}
+  @media(prefers-reduced-motion:reduce){.bg-cell{transition:none}}
+  .tl-legend{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);margin-top:10px;line-height:1.6}
+  .tl-legend .sw{display:inline-block;width:10px;height:10px;border-radius:3px;vertical-align:middle;margin:0 3px 0 10px}
+  .tl-legend .sw:first-child{margin-left:0}
+  .tl-legend .hatch{background:repeating-linear-gradient(45deg,rgba(140,160,210,.35) 0 3px,transparent 3px 6px);border:1px solid var(--line)}
+
+  /* readouts */
+  .reads{display:flex;flex-wrap:wrap;gap:12px;margin-top:18px}
+  .read{flex:1 1 150px;min-width:140px;background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .read .rk{font-family:var(--mono);font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px}
+  .read .rv{font-family:var(--mono);font-size:1.72rem;font-weight:600;line-height:1;color:var(--ink)}
+  .read .rv small{font-size:.9rem;color:var(--muted);font-weight:400}
+  .read.util .rv{color:var(--cyan)}
+  .read.tput{border-color:rgba(110,231,135,.3)}
+  .read.tput .rv{color:var(--green)}
+  .read .rsub{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);margin-top:7px}
+  .util-track{height:8px;background:rgba(140,160,210,.12);border-radius:4px;overflow:hidden;margin-top:10px}
+  .util-fill{height:100%;width:0;background:linear-gradient(90deg,rgba(67,214,200,.5),var(--cyan));border-radius:4px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+  @media(prefers-reduced-motion:reduce){.util-fill{transition:none}}
+
+  .lat-note{margin-top:16px;font-family:var(--mono);font-size:11.5px;color:var(--muted);background:rgba(110,231,135,.06);border:1px solid rgba(110,231,135,.22);border-radius:10px;padding:11px 14px;line-height:1.55}
+  .lat-note b{color:var(--green)}
+
+  .formula-line{font-family:var(--mono);font-size:11.5px;color:var(--muted-2);text-align:center;margin-top:16px;line-height:1.7}
+  .formula-line b{color:var(--ink)}
+  .formula-line .g{color:var(--green)}
+
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--green)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part2">Part 2 · How LLMs Run Fast</a><span class="sep">/</span>
+    <span class="here">6 · Continuous batching</span>
+  </nav>
+  <span class="eyebrow">Part 2 · Lesson 6/8</span>
+  <h1><span class="green">Continuous batching</span>: read the weights once, serve many</h1>
+  <p class="lede">One decode step streams the entire model no matter how many requests ride along. So push many requests through that single weight-read and the cost is shared — total tokens per second (throughput) multiplies, while any one reply arrives no sooner.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~6 min</b></span>
+    <span class="meta-pill">🎚 <b>utilization + throughput, computed</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Decode is <a href="prefill-decode.html">bandwidth-bound</a>: every step streams <b class="strong-ink">all</b> the model's weights out of memory to make progress — 13.2 GB moved for the 7B preset, whether one request is running or thirty-two. So push <span class="green">many</span> requests' tokens through that single weight-read at once and the expensive read is <b class="strong-ink">amortized</b> across everyone. More total tokens per second — <span class="green">throughput</span> — for the same bytes moved.</p>
+    <p><b class="strong-ink">Static</b> batching launches a fixed batch and waits for the <b class="strong-ink">longest</b> member to finish. A request that only needs 6 tokens sits idle for the other 14 steps while a 20-token neighbour keeps going — its slot burns capacity doing nothing until the whole batch resets.</p>
+    <p><b class="strong-ink">Continuous</b> batching swaps a finished sequence out and a waiting one in <span class="green">every step</span> — interleaving fresh prefills with in-flight decodes — so no slot ever idles. It multiplies throughput; it does <b class="strong-ink">not</b> make any single reply arrive sooner. <span class="green">Throughput</span> is not <span class="strong-ink">latency</span>.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>4 slots, one weight-read per step · utilization computed live</span></div>
+
+    <div class="seg-row">
+      <div class="seg-wrap" role="tablist" aria-label="Batching mode">
+        <button class="seg" id="segStatic" data-mode="static" role="tab">static batching</button>
+        <button class="seg active" id="segCont" data-mode="continuous" role="tab" aria-selected="true">continuous batching</button>
+      </div>
+    </div>
+
+    <div class="len-row" id="lenRow"><!-- decode-length inputs injected --></div>
+    <div class="len-hint">edit the four decode lengths (1–20 tokens each) — every readout recomputes</div>
+
+    <div class="tl-wrap">
+      <div class="tl-axis"><span id="axLeft">step 1</span><span id="axRight">step 20</span></div>
+      <div id="timeline"><!-- slot rows injected --></div>
+      <div class="tl-legend" id="legend"></div>
+    </div>
+
+    <div class="reads">
+      <div class="read util">
+        <div class="rk">GPU utilization</div>
+        <div class="rv" id="rUtil">—</div>
+        <div class="util-track"><div class="util-fill" id="rUtilBar"></div></div>
+        <div class="rsub" id="rUtilSub"></div>
+      </div>
+      <div class="read tput">
+        <div class="rk">Throughput</div>
+        <div class="rv" id="rTput">—</div>
+        <div class="rsub" id="rTputSub"></div>
+      </div>
+      <div class="read">
+        <div class="rk">Steps to clear the work</div>
+        <div class="rv" id="rSteps">—</div>
+        <div class="rsub" id="rStepsSub"></div>
+      </div>
+    </div>
+
+    <div class="lat-note" id="latNote"></div>
+
+    <div class="formula-line" id="formula"></div>
+
+    <p class="stage-note"><span class="key green">TRY →</span> Flip to <b>static</b> and watch the short rows go <b>hatched-idle</b> while the longest slot runs out the clock — utilization drops. Flip back to <b>continuous</b> and those idle cells refill with a new-coloured request; utilization jumps to ~100%. Then edit the lengths: make them all equal and static catches up; make one huge and static's waste (and continuous's win) grows.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers (default lengths [20, 8, 12, 6])</summary>
+    <div class="hood-body">
+      <p>Four slots, decode lengths <code>[20, 8, 12, 6]</code> → <code>Σ = 46</code> useful tokens, <code>max = 20</code>, <code>B = 4</code>.</p>
+      <div class="wrapx"><table>
+        <tr><th>mode</th><th>steps</th><th>useful slot-steps</th><th>total slot-steps</th><th>utilization</th></tr>
+        <tr><td>static</td><td>20</td><td>46</td><td>4 × 20 = 80</td><td>46 / 80 = 57.5%</td></tr>
+        <tr><td>continuous</td><td>⌈46/4⌉ = 12</td><td>46</td><td>≈ 46 (slots refill)</td><td>≈ 100%</td></tr>
+      </table></div>
+      <p><b>Static</b> runs 20 steps because it must wait for the longest member; only 46 of the 80 slot-steps do real work, so the GPU sits <code>1 − 0.575 = 42.5%</code> idle. <b>Continuous</b> keeps all four slots full by swapping finished sequences out and queued ones in, clearing the same 46 tokens in <code>46 / 4 = 11.5</code> steps.</p>
+      <p><b>Throughput speedup</b> = static steps / continuous steps = <code>20 / 11.5 = 1.74×</code> — which is exactly <code>1 / 0.575</code>, the reciprocal of static utilization. The single weight-read per step is the fixed cost; filling every slot amortizes it across <code>1.74×</code> more tokens.</p>
+      <p><b>Throughput ≠ latency.</b> Batching multiplies <i>total</i> tokens/second across all users, but a single request still advances exactly one token per step — its own reply arrives no sooner. This is why one served model answers thousands of people at once for the same weight-reads. (Paging, the previous page, is what makes room in VRAM for all those concurrent KV caches.)</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Batching makes each user's reply come back faster.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Batching multiplies <b style="color:var(--green)">throughput</b> — tokens per second across all users — by sharing one weight-read among many requests. A single request's <b>latency</b> is unchanged: it still gets exactly one token per step.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>One decode step reads the whole model regardless of batch size, so packing more requests into it is nearly free throughput. <b>Continuous batching</b> keeps every slot busy by swapping finished sequences out mid-flight — utilization climbs from ~57% to ~100%, throughput ~1.74× — while each reply's latency stays the same.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Continuous batching improves mostly…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">the latency of one request — each reply arrives sooner.</button>
+      <button class="opt" data-correct="1">total throughput — it keeps every slot busy by swapping finished requests out mid-flight.</button>
+      <button class="opt" data-correct="0">the model's accuracy on hard prompts.</button>
+    </div>
+    <div class="why"><b>Why:</b> the weight-read is a fixed cost per step, so filling every slot amortizes it across more tokens — raising tokens/second. Each individual reply still advances one token per step, so its latency is unchanged.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="paged-attention.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Paged attention: stop reserving unused memory</div></a>
+  <a href="speculative-decoding.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Guess ahead, verify in one pass</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course-data-p2.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Continuous batching — utilization + throughput COMPUTED live.
+   One decode step reads the whole model; packing requests amortizes it.
+   Globals from course-data-p2.js: BATCH_LENS = [20, 8, 12, 6].
+   Nothing is replayed: every edit / toggle re-runs the sums and repaints
+   the timeline; the readouts fall out of Σlen, max(len), and B.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $  = (s,r)=> (r||document).querySelector(s);
+  const $$ = (s,r)=> Array.from((r||document).querySelectorAll(s));
+
+  const COLORS = ['a','b','c','d'];        // one class per request slot
+  const NEWREQ = 'e';                      // colour for a queued request swapped in
+  const SLOT_NAMES = ['slot 1','slot 2','slot 3','slot 4'];
+
+  let mode = 'continuous';
+  let lens = BATCH_LENS.slice();           // editable copy of the shared default
+
+  const clampLen = (v)=> Math.max(1, Math.min(20, Math.round(v)||1));
+
+  /* ---------- editable decode-length inputs ---------- */
+  const lenRow = $('#lenRow');
+  const COLORHEX = {a:'rgba(157,140,255,.9)',b:'rgba(67,214,200,.9)',c:'rgba(255,180,84,.9)',d:'rgba(255,122,138,.9)'};
+  lens.forEach((v,i)=>{
+    const cell = document.createElement('div');
+    cell.className = 'len-cell';
+    cell.innerHTML =
+      `<span class="lc-lab"><span class="dotmark" style="background:${COLORHEX[COLORS[i]]}"></span>${SLOT_NAMES[i]}</span>`+
+      `<input class="len-in" id="len${i}" type="number" min="1" max="20" step="1" value="${v}" aria-label="${SLOT_NAMES[i]} decode length">`;
+    lenRow.appendChild(cell);
+  });
+  lens.forEach((_,i)=>{
+    const inp = $('#len'+i);
+    const commit = ()=>{ inp.value = clampLen(+inp.value); lens[i] = +inp.value; render(); };
+    inp.addEventListener('change', commit);
+    inp.addEventListener('input', ()=>{ if(inp.value!=='' && !isNaN(+inp.value)){ lens[i]=clampLen(+inp.value); render(); } });
+  });
+
+  /* ---------- pure compute: everything falls out of the sums ---------- */
+  function compute(){
+    const B   = lens.length;
+    const sum = lens.reduce((a,b)=>a+b,0);
+    const mx  = Math.max(...lens);
+    // static: batch runs until the longest member finishes
+    const staticSteps = mx;
+    const staticUtil  = sum / (B * mx);                 // useful / total slot-steps
+    // continuous: slots stay full, work drains at B tokens/step
+    const contStepsIdeal = sum / B;                     // 11.5 for the default
+    const contSteps      = Math.ceil(contStepsIdeal);   // 12 whole steps
+    const speedup        = staticSteps / contStepsIdeal;// = (B*mx)/sum = 1/staticUtil
+    return { B, sum, mx, staticSteps, staticUtil, contSteps, contStepsIdeal, speedup };
+  }
+
+  /* ---------- timeline: static (short rows idle) vs continuous (refilled) ---------- */
+  function paintTimeline(C){
+    const tl = $('#timeline'); tl.innerHTML='';
+    const cols = (mode==='static') ? C.staticSteps : C.contSteps;
+    $('#axRight').textContent = 'step ' + cols;
+
+    if(mode==='static'){
+      // each request occupies its own slot; the rest of the row hatches idle
+      for(let r=0;r<C.B;r++){
+        tl.appendChild(makeRow(r, cols, (c)=> c < lens[r] ? COLORS[r] : 'idle'));
+      }
+    }else{
+      // continuous: lay every token end-to-end across B rows of `cols` cells,
+      // topping up the tail with a queued NEW request so no slot idles.
+      const stream = [];
+      lens.forEach((len,i)=>{ for(let t=0;t<len;t++) stream.push(COLORS[i]); });
+      const cells = C.B * cols;
+      while(stream.length < cells) stream.push(NEWREQ);   // queued request swapped in
+      for(let r=0;r<C.B;r++){
+        tl.appendChild(makeRow(r, cols, (c)=> stream[r*cols + c]));
+      }
+    }
+    // legend
+    const reqSw = lens.map((_,i)=>`<span class="sw ${COLORS[i]}" style="border:1px solid"></span>req ${i+1}`).join('');
+    $('#legend').innerHTML = (mode==='static')
+      ? `${reqSw} <span class="sw hatch"></span>idle (slot finished, waiting for the batch to reset)`
+      : `${reqSw} <span class="sw ${NEWREQ}"></span>queued request swapped in — every slot stays full`;
+  }
+  function makeRow(r, cols, classFor){
+    const wrap = document.createElement('div'); wrap.className='slot-row';
+    const lab  = document.createElement('div'); lab.className='slot-lab'; lab.textContent = SLOT_NAMES[r];
+    const grid = document.createElement('div'); grid.className='batch-grid';
+    grid.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+    for(let c=0;c<cols;c++){
+      const cell = document.createElement('div');
+      cell.className = 'bg-cell ' + classFor(c);
+      grid.appendChild(cell);
+    }
+    wrap.appendChild(lab); wrap.appendChild(grid);
+    return wrap;
+  }
+
+  /* ---------- readouts, all computed ---------- */
+  function paintReads(C){
+    const util = (mode==='static') ? C.staticUtil : Math.min(1, C.sum/(C.B*C.contStepsIdeal)); // continuous ≈ 1
+    const utilPct = util*100;
+    $('#rUtil').textContent = utilPct.toFixed(1) + '%';
+    $('#rUtilBar').style.width = utilPct.toFixed(1) + '%';
+    $('#rUtilSub').innerHTML = (mode==='static')
+      ? `${C.sum} useful of ${C.B*C.mx} slot-steps`
+      : `every slot full each step`;
+
+    // throughput multiplier vs the static baseline (static tokens/step = Σ/max)
+    const tput = (mode==='static') ? 1 : C.speedup;
+    $('#rTput').innerHTML = tput.toFixed(2) + '<small>×</small>';
+    $('#rTputSub').innerHTML = (mode==='static')
+      ? `baseline — ${(C.sum/C.staticSteps).toFixed(2)} tokens/step`
+      : `${C.B}.00 tokens/step vs ${(C.sum/C.staticSteps).toFixed(2)} static`;
+
+    const steps = (mode==='static') ? C.staticSteps : C.contSteps;
+    $('#rSteps').innerHTML = steps + '<small> steps</small>';
+    $('#rStepsSub').innerHTML = (mode==='static')
+      ? `waits for the longest (${C.mx})`
+      : `⌈${C.sum} / ${C.B}⌉ = ${C.contSteps}`;
+
+    $('#latNote').innerHTML = `<b>Latency per request: unchanged.</b> Each reply still advances one token per step in both modes — continuous batching adds <b>${C.speedup.toFixed(2)}×</b> throughput across all ${C.B} slots without making any single request faster.`;
+
+    $('#formula').innerHTML =
+      `static util = <b>Σlen / (B × max)</b> = ${C.sum} / (${C.B}×${C.mx}) = <b>${(C.staticUtil*100).toFixed(1)}%</b>`+
+      ` &nbsp;·&nbsp; continuous ≈ full slots every step`+
+      ` &nbsp;·&nbsp; throughput <span class="g">×</span> = static steps / (Σlen/B) = ${C.staticSteps} / ${C.contStepsIdeal.toFixed(1)} = <b class="g">${C.speedup.toFixed(2)}×</b>`;
+  }
+
+  /* ---------- master render ---------- */
+  function render(){
+    const C = compute();
+    paintTimeline(C);
+    paintReads(C);
+  }
+
+  /* ---------- mode toggle ---------- */
+  $$('.seg').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      mode = b.dataset.mode;
+      $$('.seg').forEach(x=>{
+        const on = x===b;
+        x.classList.toggle('active', on);
+        x.setAttribute('aria-selected', on?'true':'false');
+      });
+      render();
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
