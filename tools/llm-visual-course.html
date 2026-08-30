@@ -278,6 +278,23 @@
   .seg:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
   .grid-dots{width:100%;aspect-ratio:1/.7;background:var(--bg-2);border:1px solid var(--line);border-radius:14px;position:relative;overflow:hidden}
 
+  /* neural-network forward pass */
+  .nn-wrap{display:grid;grid-template-columns:1.55fr .9fr;gap:24px;align-items:center}
+  @media(max-width:760px){.nn-wrap{grid-template-columns:1fr}}
+  .nn-svg{width:100%;height:auto;background:var(--bg-2);border:1px solid var(--line);border-radius:14px}
+  .nn-node{transition:fill .35s ease,stroke .35s ease}
+  .nn-node.lit{stroke:var(--amber);stroke-width:2.4}
+  .nn-edge{transition:stroke-opacity .3s ease}
+  .nn-side .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px}
+  .neuron{font-family:var(--mono);font-size:.82rem;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 13px;line-height:1.85}
+  .neuron .op{color:var(--muted-2)}
+  .neuron .wv{color:var(--rose)}
+  .neuron .av{color:var(--cyan)}
+  .nn-inputs{display:flex;flex-direction:column;gap:9px;margin-top:16px}
+  .nn-inrow{display:grid;grid-template-columns:24px 1fr 40px;gap:10px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .nn-inrow input[type=range]{accent-color:var(--rose);height:22px;cursor:pointer}
+  .nn-inrow .rv{color:var(--ink);text-align:right}
+
   /* ---------- attention ---------- */
   .attn-stage{position:relative}
   .attn-tokens{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;position:relative;z-index:2;margin:14px 0 8px}
@@ -363,11 +380,44 @@
   .mcell.on{background:var(--violet);border-color:var(--violet);box-shadow:0 0 8px rgba(157,140,255,.3)}
   .mask-cap{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);text-align:center;margin-top:10px}
   .arch-info h4{font-size:1.25rem;margin-bottom:4px}
-  .arch-info .flow{font-family:var(--mono);font-size:12px;color:var(--violet);margin-bottom:12px}
+  .arch-info .aflow{font-family:var(--mono);font-size:12px;color:var(--violet);margin-bottom:12px}
   .arch-info p{color:var(--muted);font-size:.95rem;margin-bottom:12px}
   .arch-info .row{display:flex;gap:10px;flex-wrap:wrap}
   .pill{font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:7px;border:1px solid var(--line);color:var(--muted);background:var(--bg-2)}
   .pill b{color:var(--ink);font-weight:500}
+
+  /* architecture data-flow diagram */
+  .flow{margin:4px 0 28px}
+  .flow-col{display:flex;flex-direction:column;align-items:stretch;gap:0;max-width:470px;margin:0 auto}
+  .flow-stage{border:1px solid var(--line);border-radius:11px;background:var(--bg-2);padding:12px 15px;text-align:center;transition:.3s;position:relative}
+  .flow-stage.block{border-color:rgba(157,140,255,.42);background:linear-gradient(180deg,rgba(157,140,255,.09),var(--bg-2))}
+  .flow-stage.out{border-color:rgba(255,180,84,.4)}
+  .flow-stage.mem{border-color:rgba(67,214,200,.4);background:linear-gradient(180deg,rgba(67,214,200,.08),var(--bg-2))}
+  .flow-stage .fl-label{font-family:var(--disp);font-weight:600;font-size:.98rem}
+  .flow-stage .fl-note{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);margin-top:3px}
+  .flow-chips{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-top:9px}
+  .flow-chip{font-family:var(--mono);font-size:12px;padding:4px 9px;border-radius:7px;border:1px solid var(--line-strong);background:rgba(24,36,68,.7);color:var(--muted)}
+  .flow-chip.mask{border-color:var(--rose);color:var(--rose)}
+  .flow-chip.outc{border-color:var(--violet);color:#0d0a1e;background:var(--violet)}
+  .flow-stage.active{border-color:var(--amber);box-shadow:0 0 0 2px rgba(255,180,84,.28)}
+  .flow-stage.block.active{border-color:var(--violet);box-shadow:0 0 0 2px rgba(157,140,255,.34)}
+  .flow-conn{height:22px;width:2px;background:var(--line-strong);margin:0 auto;position:relative}
+  .flow-conn .fill{position:absolute;top:0;left:0;width:100%;height:0;background:var(--amber);transition:height .36s ease}
+  .flow-conn.on .fill{height:100%}
+  .flow-conn::after{content:'▾';position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);color:var(--muted-2);font-size:13px}
+  .flow-dual{display:grid;grid-template-columns:1fr 92px 1fr;gap:0;align-items:center}
+  @media(max-width:680px){.flow-dual{grid-template-columns:1fr}}
+  .flow-dual .flow-col{max-width:none}
+  .flow-colhead{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--muted-2);text-align:center;margin-bottom:11px;text-transform:uppercase}
+  .flow-cross{align-self:center;text-align:center;padding:6px 2px}
+  @media(max-width:680px){.flow-cross{padding:12px 0}}
+  .flow-cross .arw{font-size:1.55rem;color:var(--muted-2);transition:.3s;line-height:1;display:inline-block}
+  .flow-cross .cl{display:block;font-family:var(--mono);font-size:9.5px;color:var(--muted-2);margin-top:3px}
+  .flow-cross.on .arw{color:var(--cyan);text-shadow:0 0 14px rgba(67,214,200,.6)}
+  .flow-cross.on .cl{color:var(--cyan)}
+  @media(max-width:680px){.flow-cross .arw{transform:rotate(90deg)}}
+  .flow-loop{font-family:var(--mono);font-size:11px;color:var(--violet);text-align:center;margin-top:13px;opacity:.35;transition:.3s}
+  .flow-loop.on{opacity:1}
 
   /* ---------- context / scale ---------- */
   .scale-row{display:grid;grid-template-columns:150px 1fr 120px;gap:16px;align-items:center;margin-bottom:16px}
@@ -495,15 +545,36 @@
 </section>
 
 <!-- ============ 04 · WEIGHTS ============ -->
-<section id="weights" data-label="Weights">
+<section id="weights" data-label="Neural network">
   <div class="wrap">
     <div class="sec-head reveal">
-      <div class="num">04 / THE LEARNED KNOBS</div>
-      <h2>Inside is a web of <span class="rose">weights</span> — billions of them</h2>
-      <p>A neural network is just numbers flowing through layers, multiplied and added along connections. Each connection has a <span class="strong-ink">weight</span> — a tiny knob. <span class="rose">Training</span> is the process of nudging every knob until the next-token guesses come out right. A model's "size" is simply how many of these knobs it has.</p>
+      <div class="num">04 / INSIDE THE MACHINE</div>
+      <h2>How a <span class="rose">neural network</span> turns numbers into numbers</h2>
+      <p>Time to open the box. A neural network is just numbers flowing through a web of connections. Values enter on the left; along every connection they're multiplied by a <span class="strong-ink">weight</span>; at each node they're summed, nudged by a <span class="mono">bias</span>, and gently <em>squished</em> into a tidy range; then handed to the next layer. Do that a few times and an answer pops out on the right. Here's a tiny one you can actually run.</p>
     </div>
     <div class="stage reveal">
-      <div class="stage-label"><span>Parameters (weights)</span></div>
+      <div class="stage-label"><span>Forward pass · drag the inputs, or run it</span><button class="btn" data-replay="net"><span class="ico"></span>Run forward pass</button></div>
+      <div class="nn-wrap">
+        <svg class="nn-svg" id="nnSvg" role="img" aria-label="A small neural network: three inputs, two hidden layers, two outputs"></svg>
+        <div class="nn-side">
+          <div class="k">One node, up close</div>
+          <div class="neuron">out <span class="op">=</span> squish( <span class="av">x₁</span><span class="op">·</span><span class="wv">w₁</span> <span class="op">+</span> <span class="av">x₂</span><span class="op">·</span><span class="wv">w₂</span> <span class="op">+</span> <span class="av">x₃</span><span class="op">·</span><span class="wv">w₃</span> <span class="op">+</span> b )</div>
+          <div class="nn-inputs" aria-label="Network inputs">
+            <div class="nn-inrow"><span>x₁</span><input type="range" min="0" max="100" value="85" aria-label="input one"><span class="rv">0.85</span></div>
+            <div class="nn-inrow"><span>x₂</span><input type="range" min="0" max="100" value="30" aria-label="input two"><span class="rv">0.30</span></div>
+            <div class="nn-inrow"><span>x₃</span><input type="range" min="0" max="100" value="60" aria-label="input three"><span class="rv">0.60</span></div>
+          </div>
+          <p style="color:var(--muted);font-size:.84rem;margin-top:14px">Change an input and every node downstream recomputes. Line thickness = weight size; <span class="rose">rose</span> = positive, grey = negative.</p>
+        </div>
+      </div>
+      <p class="stage-note"><span class="key rose">LEARNING →</span> &nbsp;Nobody sets these weights by hand. <span class="strong-ink">Training</span> shows the network millions of examples and nudges every weight a hair whenever the output is wrong — until the whole web produces good answers. The two outputs here stand in for a real model's next-token scores (which has one output per possible token — tens of thousands of them).</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The model is programmed with hand-written rules and if-else logic.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">There are no rules to read — only these tuned numbers. Everything it "knows" lives in the weights, learned from data.</span></div>
+      </div>
+    </div>
+    <div class="stage reveal" style="margin-top:22px">
+      <div class="stage-label"><span>…and how many weights? Pick a scale</span></div>
       <div class="net-wrap">
         <div class="grid-dots" id="gridDots"></div>
         <div>
@@ -682,19 +753,20 @@
     <div class="sec-head reveal">
       <div class="num">10 / THREE SHAPES</div>
       <h2>Not all transformers are built the <span class="violet">same</span></h2>
-      <p>The same building block gets wired up in three classic ways, depending on the job. The difference comes down to <span class="strong-ink">who's allowed to look at whom</span> — the attention pattern. Toggle between them and watch the grid: a lit cell means "this token can attend to that one."</p>
+      <p>The same building block gets wired up in three classic ways, depending on the job. The difference comes down to <span class="strong-ink">who's allowed to look at whom</span> — the attention pattern. Pick one below to watch <span class="strong-ink">data flow</span> through it, and see the attention grid where a lit cell means "this token can look at that one."</p>
     </div>
     <div class="stage reveal">
-      <div class="stage-label"><span>Attention pattern by architecture</span></div>
+      <div class="stage-label"><span>Pick an architecture · watch the data flow</span><button class="btn" data-replay="flow"><span class="ico"></span>Play data flow</button></div>
       <div class="arch-ctl" role="group" aria-label="Architecture">
         <button class="arch-seg active" data-arch="dec">Decoder-only · GPT / Claude</button>
         <button class="arch-seg" data-arch="enc">Encoder-only · BERT</button>
         <button class="arch-seg" data-arch="encdec">Encoder–Decoder · T5</button>
       </div>
+      <div class="flow" id="flowDiagram"></div>
       <div class="arch-body">
         <div>
           <div class="mask-grid" id="maskGrid"></div>
-          <div class="mask-cap" id="maskCap">each row = a token · lit = it may look there</div>
+          <div class="mask-cap" id="maskCap">who can look at whom · lit = allowed</div>
         </div>
         <div class="arch-info" id="archInfo"></div>
       </div>
@@ -912,6 +984,104 @@
   }
   $$('#scaleBtns .seg').forEach(b=>b.addEventListener('click',()=>setParams(b.dataset.p)));
 
+  /* ========== 04 neural network forward pass ========== */
+  const nnSvg=$('#nnSvg');
+  const NN_L=[3,4,4,2], NN_W=640, NN_H=340;
+  const NN_ROSE='#ff7a8a', NN_NEG='#5b6b93';
+  const NW=[
+    [[1.3,-0.9,0.7],[-0.6,1.2,0.8],[0.8,0.5,-1.2],[1.0,-0.7,0.4]],
+    [[0.9,-1.1,0.6,0.3],[-0.8,0.7,1.0,-0.5],[0.6,0.5,-0.9,0.8],[0.3,-0.4,0.7,1.0]],
+    [[1.1,-0.9,0.6,0.8],[-1.0,1.0,-0.6,0.5]]
+  ];
+  const NB=[[0.1,-0.2,0.15,0.05],[0.05,-0.1,0.2,-0.05],[0.0,0.1]];
+  let nnIn=[0.85,0.30,0.60];
+  const nnTanh=x=>Math.tanh(x), nnSig=x=>1/(1+Math.exp(-x));
+  function nnForward(inp){
+    const layers=[inp.slice()];
+    for(let l=0;l<NW.length;l++){
+      const prev=layers[l], act=(l===NW.length-1)?nnSig:nnTanh;
+      layers.push(NW[l].map((row,i)=>act(row.reduce((a,w,j)=>a+w*prev[j],0)+NB[l][i])));
+    }
+    return layers;
+  }
+  let nnPos=[];
+  function nnLayout(){
+    nnPos=[]; const xs=[62,242,422,582];
+    NN_L.forEach((n,li)=>{
+      const gap=64, y0=NN_H/2-(n-1)*gap/2, col=[];
+      for(let i=0;i<n;i++) col.push({x:xs[li],y:n===1?NN_H/2:y0+i*gap});
+      nnPos.push(col);
+    });
+  }
+  function svgEl(tag,at){const e=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const k in at)e.setAttribute(k,at[k]);return e;}
+  function buildNet(){
+    if(!nnSvg) return;
+    nnLayout();
+    nnSvg.setAttribute('viewBox','0 0 '+NN_W+' '+NN_H);
+    nnSvg.innerHTML='';
+    for(let l=0;l<nnPos.length-1;l++){
+      for(let j=0;j<nnPos[l].length;j++)for(let i=0;i<nnPos[l+1].length;i++){
+        const w=NW[l][i][j], a=nnPos[l][j], b=nnPos[l+1][i];
+        nnSvg.appendChild(svgEl('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,
+          stroke:w>=0?NN_ROSE:NN_NEG,'stroke-width':(0.4+Math.abs(w)*1.3).toFixed(2),
+          'stroke-opacity':0.16,class:'nn-edge','data-l':l}));
+      }
+    }
+    nnPos.forEach((col,li)=>col.forEach((p,i)=>{
+      nnSvg.appendChild(svgEl('circle',{cx:p.x,cy:p.y,r:16,class:'nn-node','data-l':li,'data-i':i,
+        fill:'#0e1528',stroke:'rgba(140,160,210,.35)','stroke-width':1.4}));
+      const t=svgEl('text',{x:p.x,y:p.y+4,'text-anchor':'middle',class:'nn-val','data-l':li,'data-i':i,
+        fill:'#93a1c4','font-size':'11','font-family':'JetBrains Mono, monospace'});
+      nnSvg.appendChild(t);
+    }));
+    ['inputs','hidden','hidden','outputs'].forEach((lbl,li)=>{
+      const t=svgEl('text',{x:nnPos[li][0].x,y:20,'text-anchor':'middle',fill:'#657297','font-size':'10.5','font-family':'JetBrains Mono, monospace'});
+      t.textContent=lbl; nnSvg.appendChild(t);
+    });
+    updateNet();
+  }
+  function nnFill(li,v){
+    const inten=li===0?v:(li===NN_L.length-1?v:(v+1)/2);
+    return 'rgba(255,122,138,'+(0.12+Math.max(0,Math.min(1,inten))*0.82).toFixed(2)+')';
+  }
+  function setNode(li,i,v){
+    const node=nnSvg.querySelector('.nn-node[data-l="'+li+'"][data-i="'+i+'"]');
+    const txt=nnSvg.querySelector('.nn-val[data-l="'+li+'"][data-i="'+i+'"]');
+    if(txt) txt.textContent=v.toFixed(2);
+    if(node) node.setAttribute('fill',nnFill(li,v));
+  }
+  function updateNet(){
+    if(!nnSvg) return;
+    const layers=nnForward(nnIn);
+    layers.forEach((col,li)=>col.forEach((v,i)=>setNode(li,i,li===0?nnIn[i]:v)));
+    const out=layers[layers.length-1], top=out[0]>=out[1]?0:1;
+    nnSvg.querySelectorAll('.nn-node[data-l="'+(NN_L.length-1)+'"]').forEach(n=>n.classList.toggle('lit',+n.getAttribute('data-i')===top));
+  }
+  let netTimers=[];
+  function runNet(){
+    if(!nnSvg) return;
+    netTimers.forEach(clearTimeout); netTimers=[];
+    if(reduce){ updateNet(); return; }
+    nnSvg.querySelectorAll('.nn-val').forEach(t=>t.textContent='');
+    nnSvg.querySelectorAll('.nn-node').forEach(n=>{n.setAttribute('fill','#0e1528');n.classList.remove('lit');});
+    nnSvg.querySelectorAll('.nn-edge').forEach(e=>e.setAttribute('stroke-opacity','0.16'));
+    const layers=nnForward(nnIn);
+    layers.forEach((col,li)=>{
+      netTimers.push(setTimeout(()=>{
+        if(li>0) nnSvg.querySelectorAll('.nn-edge[data-l="'+(li-1)+'"]').forEach(e=>{
+          e.setAttribute('stroke-opacity','0.5');
+          setTimeout(()=>e.setAttribute('stroke-opacity','0.16'),520);
+        });
+        col.forEach((v,i)=>setNode(li,i,li===0?nnIn[i]:v));
+        if(li===layers.length-1){
+          const top=col[0]>=col[1]?0:1;
+          const n=nnSvg.querySelector('.nn-node[data-l="'+li+'"][data-i="'+top+'"]');
+          if(n) n.classList.add('lit');
+        }
+      }, li*560));
+    });
+  }
+
   /* ========== 05 attention ========== */
   const aWords=['The','cat','sat','on','the','mat','because','it','was','tired'];
   // attention weight tables: query index -> {targetIndex: weight}
@@ -979,7 +1149,7 @@
       const path=document.createElementNS('http://www.w3.org/2000/svg','path');
       path.setAttribute('d','M '+q.x+' '+q.y+' Q '+midx+' '+cy+' '+t.x+' '+t.y);
       path.setAttribute('fill','none');
-      path.setAttribute('stroke','var(--violet)');
+      path.setAttribute('stroke','#9d8cff');
       path.setAttribute('stroke-width',(1+wt*6).toFixed(2));
       path.setAttribute('stroke-linecap','round');
       path.setAttribute('opacity',(0.25+wt*0.65).toFixed(2));
@@ -1113,18 +1283,110 @@
       maskGrid.appendChild(c);
     }
   }
+  const flowDiagram=$('#flowDiagram');
+  let curArch='dec';
+  const flowConfigs={
+    dec:{ mode:'single', loop:'append the new token, then run it all again  ↺  (autoregressive)',
+      stages:[
+        {label:'Input tokens', note:'the prompt so far', chips:['The','cat','sat','on','the']},
+        {label:'Embed + position', note:'words → vectors, tagged with order'},
+        {label:'Decoder block × N', note:'masked (causal) self-attention → feed-forward', block:true},
+        {label:'Predict next token', note:'the most likely continuation', chips:['mat'], out:true}
+      ]},
+    enc:{ mode:'single',
+      stages:[
+        {label:'Input tokens', note:'the whole input, all at once', chips:['The','cat','[MASK]','on','the','mat'], mask:true},
+        {label:'Embed + position', note:'words → vectors, tagged with order'},
+        {label:'Encoder block × N', note:'bidirectional self-attention → feed-forward', block:true},
+        {label:'Fill the blank / understand', note:'[MASK] → “sat”', chips:['sat'], out:true}
+      ]},
+    encdec:{ mode:'dual', cross:'cross-attention',
+      enc:{ head:'Encoder — reads source', stages:[
+        {label:'Source text', chips:['The','cat','sat']},
+        {label:'Embed + position'},
+        {label:'Encoder block × N', note:'bidirectional', block:true},
+        {label:'Encoded meaning', note:'a summary the decoder consults', mem:true}
+      ]},
+      dec:{ head:'Decoder — writes target', stages:[
+        {label:'Output so far', chips:['Le','chat']},
+        {label:'Embed + position'},
+        {label:'Decoder block × N', note:'causal + cross-attention', block:true},
+        {label:'Next token', chips:['assis'], out:true}
+      ]}
+    }
+  };
+  function flowStageHTML(s){
+    let chips='';
+    if(s.chips) chips='<div class="flow-chips">'+s.chips.map(c=>'<span class="flow-chip'+(s.out?' outc':'')+(s.mask&&c==='[MASK]'?' mask':'')+'">'+c+'</span>').join('')+'</div>';
+    const cls='flow-stage'+(s.block?' block':'')+(s.out?' out':'')+(s.mem?' mem':'');
+    return '<div class="'+cls+'"><div class="fl-label">'+s.label+'</div>'+(s.note?'<div class="fl-note">'+s.note+'</div>':'')+chips+'</div>';
+  }
+  function flowColHTML(stages){
+    return stages.map((s,i)=>flowStageHTML(s)+(i<stages.length-1?'<div class="flow-conn"><div class="fill"></div></div>':'')).join('');
+  }
+  function renderFlow(arch){
+    const c=flowConfigs[arch]; if(!flowDiagram||!c) return;
+    if(c.mode==='single'){
+      flowDiagram.innerHTML='<div class="flow-col">'+flowColHTML(c.stages)+'</div>'+(c.loop?'<div class="flow-loop">'+c.loop+'</div>':'');
+    } else {
+      flowDiagram.innerHTML='<div class="flow-dual">'+
+        '<div class="flow-col"><div class="flow-colhead">'+c.enc.head+'</div>'+flowColHTML(c.enc.stages)+'</div>'+
+        '<div class="flow-cross"><span class="arw">⇢</span><span class="cl">'+c.cross+'</span></div>'+
+        '<div class="flow-col"><div class="flow-colhead">'+c.dec.head+'</div>'+flowColHTML(c.dec.stages)+'</div>'+
+      '</div>';
+    }
+  }
+  let flowTimers=[];
+  function playFlow(arch){
+    const c=flowConfigs[arch]; if(!flowDiagram||!c) return;
+    flowTimers.forEach(clearTimeout); flowTimers=[];
+    $$('.flow-stage',flowDiagram).forEach(s=>s.classList.remove('active'));
+    $$('.flow-conn',flowDiagram).forEach(s=>s.classList.remove('on'));
+    const loop=$('.flow-loop',flowDiagram), cross=$('.flow-cross',flowDiagram);
+    if(loop)loop.classList.remove('on'); if(cross)cross.classList.remove('on');
+    if(reduce){
+      $$('.flow-stage',flowDiagram).forEach(s=>s.classList.add('active'));
+      $$('.flow-conn',flowDiagram).forEach(s=>s.classList.add('on'));
+      if(loop)loop.classList.add('on'); if(cross)cross.classList.add('on');
+      return;
+    }
+    const step=560;
+    const seq=(items,t0)=>{
+      let t=t0;
+      items.forEach(el=>{
+        const isConn=el.classList.contains('flow-conn');
+        flowTimers.push(setTimeout(()=>{ el.classList.add(isConn?'on':'active'); }, t));
+        t+=isConn?step*0.55:step*0.5;
+      });
+      return t;
+    };
+    if(c.mode==='single'){
+      const col=$('.flow-col',flowDiagram);
+      const t=seq(Array.from(col.children),0);
+      if(loop) flowTimers.push(setTimeout(()=>loop.classList.add('on'), t+150));
+    } else {
+      const cols=$$('.flow-col',flowDiagram);
+      const encItems=Array.from(cols[0].children).filter(x=>!x.classList.contains('flow-colhead'));
+      const decItems=Array.from(cols[1].children).filter(x=>!x.classList.contains('flow-colhead'));
+      let t=seq(encItems,0);
+      flowTimers.push(setTimeout(()=>{ if(cross)cross.classList.add('on'); }, t)); t+=step*0.7;
+      seq(decItems,t);
+    }
+  }
   function setArch(key){
+    curArch=key;
     const d=archData[key];
     $$('.mcell',maskGrid).forEach(c=>{
       const on=d.mask(+c.dataset.i,+c.dataset.j);
       c.classList.toggle('on',on);
     });
     maskCap.textContent=d.cap;
-    archInfo.innerHTML='<h4>'+d.title+'</h4><div class="flow">'+d.flow+'</div><p>'+d.desc+'</p><div class="row">'+
+    archInfo.innerHTML='<h4>'+d.title+'</h4><div class="aflow">'+d.flow+'</div><p>'+d.desc+'</p><div class="row">'+
       d.pills.map(p=>'<span class="pill">'+p+'</span>').join('')+'</div>';
     $$('.arch-seg').forEach(b=>b.classList.toggle('active',b.dataset.arch===key));
+    renderFlow(key);
   }
-  $$('.arch-seg').forEach(b=>b.addEventListener('click',()=>setArch(b.dataset.arch)));
+  $$('.arch-seg').forEach(b=>b.addEventListener('click',()=>{ setArch(b.dataset.arch); playFlow(b.dataset.arch); }));
 
   /* ========== 11 scale bars ========== */
   const scaleEls=[
@@ -1147,21 +1409,25 @@
       const id=e.target.id;
       if(e.isIntersecting){
         if(runners[id]) runners[id]();
+        if(id==='weights') runNet();
         if(id==='attention'){ if(curQuery==null) resetAttn(); }
         if(id==='transformer') startTf();
+        if(id==='architectures') playFlow(curArch);
       } else {
         if(id==='transformer') stopTf();
       }
     });
   },{threshold:.32});
-  ['idea','tokens','generation','scale','attention','transformer'].forEach(id=>{const el=$('#'+id); if(el)secObs.observe(el);});
+  ['idea','tokens','weights','generation','scale','attention','transformer','architectures'].forEach(id=>{const el=$('#'+id); if(el)secObs.observe(el);});
 
   /* ---------- replay buttons ---------- */
   $$('[data-replay]').forEach(b=>b.addEventListener('click',()=>{
     const k=b.dataset.replay;
     if(k==='predict')runPredict();
     if(k==='tok')runTok();
+    if(k==='net')runNet();
     if(k==='attn')resetAttn();
+    if(k==='flow')playFlow(curArch);
     if(k==='scale')runScale();
   }));
 
@@ -1169,6 +1435,12 @@
   buildPredict();
   buildScatter();
   setParams('toy');
+  buildNet();
+  $$('.nn-inrow input').forEach((sl,idx)=>sl.addEventListener('input',()=>{
+    nnIn[idx]=+sl.value/100;
+    const rv=sl.parentElement.querySelector('.rv'); if(rv) rv.textContent=nnIn[idx].toFixed(2);
+    updateNet();
+  }));
   buildAttn();
   setStack(12);
   buildPos();
