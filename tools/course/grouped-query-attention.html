@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grouped-Query Attention — LLM Visual Course</title>
+<meta name="description" content="Share the Keys and Values: with 32 query heads over n_kv KV heads the cache shrinks by 32/n_kv. Walk MHA → GQA-8 → GQA-4 → MQA and recompute the KV cache live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* control panel */
+  .ctrls{display:grid;grid-template-columns:1fr 1fr;gap:20px 30px;margin:4px 0 26px}
+  .ctrls .wide{grid-column:1 / -1}
+  @media(max-width:620px){.ctrls{grid-template-columns:1fr;gap:18px}}
+  .ctl .clab{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:5px}
+  .ctl .clab b{color:var(--cyan);font-size:14px}
+  input[type=range]{width:100%;accent-color:var(--cyan);height:24px;cursor:pointer}
+  input[type=range]:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+
+  /* config toggle (segmented) */
+  .toggle{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{font-family:var(--mono);font-size:12.5px;padding:8px 13px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s}
+  .seg:hover{border-color:var(--line-strong);color:var(--ink)}
+  .seg.active{background:var(--cyan);color:#04201d;border-color:var(--cyan)}
+  .seg:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .seg small{display:block;font-size:9.5px;letter-spacing:.02em;opacity:.75;margin-top:1px}
+
+  /* bottleneck badge (shared visual language: cyan = memory) */
+  .bneck{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px;border:1px solid;white-space:nowrap}
+  .bn-mem{color:var(--cyan);border-color:rgba(67,214,200,.5);background:rgba(67,214,200,.1)}
+
+  /* head-grouping diagram */
+  .hg{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:20px 18px 16px;margin:2px 0 8px}
+  .hg-legend{display:flex;gap:20px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:16px}
+  .hg-legend .item{display:flex;align-items:center;gap:7px}
+  .hg-legend .dot{width:11px;height:11px;border-radius:50%;flex:none}
+  .hg-legend .dot.q{background:var(--violet)}
+  .hg-legend .chip{width:16px;height:9px;border-radius:3px;background:var(--cyan);flex:none}
+  .hg-groups{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}
+  .hg-group{border:1px solid var(--line-strong);border-radius:10px;padding:8px 8px 7px;display:flex;flex-direction:column;align-items:center;gap:7px;background:rgba(157,140,255,.05);transition:.25s}
+  .hg-queries{display:grid;gap:4px;justify-content:center}
+  .hg-q{width:9px;height:9px;border-radius:50%;background:var(--violet);box-shadow:0 0 5px rgba(157,140,255,.5)}
+  .hg-link{width:1px;height:8px;background:var(--line-strong)}
+  .hg-kv{font-family:var(--mono);font-size:9px;letter-spacing:.03em;color:#04201d;background:var(--cyan);border-radius:4px;padding:2px 7px;line-height:1.3;white-space:nowrap}
+  .hg-cap{text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:14px}
+  .hg-cap b{color:var(--cyan)}
+  .hg-cap .vi{color:var(--violet)}
+  @media(prefers-reduced-motion:reduce){.hg-group{transition:none}}
+
+  /* comparison bar vs MHA baseline */
+  .barwrap{margin:30px 0 6px}
+  .barrow{display:flex;align-items:center;gap:14px;margin:12px 0}
+  .barrow .blab{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--muted);width:118px;flex:none;text-align:right}
+  .barrow .blab b{color:var(--ink)}
+  .bar-track{position:relative;flex:1;height:26px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .bar-fill{position:absolute;top:0;left:0;height:100%;border-radius:7px 0 0 7px;transition:width .5s cubic-bezier(.2,.8,.2,1)}
+  .bar-fill.base{background:rgba(140,160,210,.22)}
+  .bar-fill.cur{background:linear-gradient(90deg,#2ea89b,var(--cyan))}
+  .bar-val{font-family:var(--mono);font-size:12px;color:var(--muted);width:104px;flex:none}
+  .bar-val b{color:var(--cyan)}
+  .bar-val.base b{color:var(--muted)}
+  @media(prefers-reduced-motion:reduce){.bar-fill,.gpu-line{transition:none}}
+  .gpu-line{position:absolute;top:-8px;bottom:-8px;width:2px;background:var(--amber);z-index:4;transition:left .5s cubic-bezier(.2,.8,.2,1)}
+  .gpu-line.hidden{display:none}
+  .gpu-line .glab{position:absolute;top:-16px;left:5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;color:var(--amber);white-space:nowrap}
+  @media(max-width:560px){.barrow{flex-wrap:wrap;gap:8px}.barrow .blab{width:100%;text-align:left}.bar-val{width:100%}}
+
+  /* readouts */
+  .reads{display:flex;gap:34px;flex-wrap:wrap;margin:26px 0 6px}
+  .read .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2)}
+  .read .v{font-family:var(--mono);font-size:1.7rem;color:var(--ink);line-height:1.1;margin-top:3px}
+  .read .v small{font-size:.42em;color:var(--muted-2);letter-spacing:.02em}
+  .read .v.cy{color:var(--cyan)} .read .v.vi{color:var(--violet)}
+
+  /* live formula strip */
+  .formula{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:24px;overflow-x:auto}
+  .formula .lab{color:var(--muted-2)}
+  .formula .op{color:var(--cyan)}
+  .formula b{color:var(--cyan)}
+  .formula .fixed{color:var(--muted-2)}
+  .formula .row2{margin-top:4px}
+
+  /* hood table */
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--cyan)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part3">Part 3 · Beyond the Basics</a><span class="sep">/</span>
+    <span class="here">02 · Grouped-query attention</span>
+  </nav>
+  <span class="eyebrow">Part 3 · Lesson 2/8</span>
+  <h1><span class="cyan">Grouped-query attention</span>: share the Keys and Values</h1>
+  <p class="lede">Every query head used to carry its own Key and Value — that's what fills the KV cache. Let several query heads <span class="strong-ink">share</span> one K/V head and the cache shrinks by exactly <code class="inl">n_heads / n_kv_heads</code>, with the query side untouched.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>grouping heads, live</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>In the attention you built back in <span class="strong-ink">Part 1 · lesson 6</span>, every <b class="strong-ink">query head</b> had its own <b class="strong-ink">Key</b> and <b class="strong-ink">Value</b> head — that's <span class="strong-ink">MHA</span>, multi-head attention. The KV cache (<span class="strong-ink">Part 2 · lesson 3</span>) stores one K and one V per token <i>per head</i>, so its size scales with the number of <span class="cyan">KV heads</span>.</p>
+    <p><b class="strong-ink">GQA</b> keeps all 32 query heads but lets groups of them <span class="cyan">share</span> a smaller set of K/V heads. 32 query heads over 8 K/V heads → 4 queries share each K/V → the cache is <b class="strong-ink">4× smaller</b>. The queries still differ; only the K/V are pooled.</p>
+    <p><b class="strong-ink">MQA</b> is the limit: one K/V head for all 32 query heads → a <b class="strong-ink">32×</b> smaller cache, at a little more quality cost. Modern models (Llama-3) sit at <span class="strong-ink">GQA-8</span>: most of the memory win, almost none of the quality loss.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label">
+      <span>Dial the KV heads · cache recomputed live</span>
+      <span class="bneck bn-mem">memory</span>
+    </div>
+
+    <!-- controls -->
+    <div class="ctrls">
+      <div class="ctl wide">
+        <div class="clab"><span>attention config · KV heads</span><b id="cfgOut">GQA-8 · 8 KV</b></div>
+        <div class="toggle" id="cfg" role="group" aria-label="attention configuration"></div>
+      </div>
+      <div class="ctl">
+        <div class="clab"><span>sequence length (context)</span><b id="seqOut">8,192</b></div>
+        <input type="range" id="seq" min="0" max="8" step="1" value="4" aria-label="sequence length">
+      </div>
+      <div class="ctl">
+        <div class="clab"><span>concurrent requests · batch</span><b id="batchOut">1</b></div>
+        <input type="range" id="batch" min="1" max="4" step="1" value="1" aria-label="batch size">
+      </div>
+    </div>
+
+    <!-- head-grouping diagram -->
+    <div class="hg">
+      <div class="hg-legend">
+        <span class="item"><span class="dot q"></span>query head (unchanged, does its own attention)</span>
+        <span class="item"><span class="chip"></span>K/V head (shared &amp; cached)</span>
+      </div>
+      <div class="hg-groups" id="hgGroups"></div>
+      <div class="hg-cap" id="hgCap"></div>
+    </div>
+
+    <!-- comparison bar vs MHA baseline -->
+    <div class="barwrap">
+      <div class="barrow">
+        <span class="blab">MHA baseline<br><b>32 KV heads</b></span>
+        <div class="bar-track"><div class="bar-fill base" id="barBase" style="width:100%"></div></div>
+        <span class="bar-val base" id="valBase"><b>—</b></span>
+      </div>
+      <div class="barrow">
+        <span class="blab" id="curLab">this config<br><b>GQA-8</b></span>
+        <div class="bar-track">
+          <div class="bar-fill cur" id="barCur"></div>
+          <div class="gpu-line hidden" id="gpuLine"><span class="glab">80 GB GPU</span></div>
+        </div>
+        <span class="bar-val" id="valCur"><b>—</b></span>
+      </div>
+    </div>
+
+    <!-- readouts -->
+    <div class="reads">
+      <div class="read"><div class="k">KV / token</div><div class="v cy" id="rTok">128 <small>KiB</small></div></div>
+      <div class="read"><div class="k">total cache</div><div class="v cy" id="rTot">1.0 <small>GiB · 1.07 GB</small></div></div>
+      <div class="read"><div class="k">shrink vs MHA</div><div class="v cy" id="rShrink">4<small>×</small></div></div>
+      <div class="read"><div class="k">query heads / K/V</div><div class="v vi" id="rShared">4</div></div>
+    </div>
+
+    <!-- live formula -->
+    <div class="formula" id="formula"></div>
+
+    <p class="stage-note"><span class="key cyan">TRY →</span> Toggle <b>MHA → GQA-8 → GQA-4 → MQA</b> and watch 32 query dots re-bracket into fewer K/V heads — the cyan bar collapses against the MHA baseline (32× at MQA). Now push <b>sequence length</b> to <b>131,072</b> and raise <b>batch</b> to 2+: the MHA baseline shoots past the amber 80 GB line while the GQA config stays well under it. Every number recomputes from the formula — nothing is stored.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p><b>Per token, all layers</b> (fp16, 32 layers, head_dim 128): <code>2 (K&amp;V) × 32 layers × n_kv_heads × 128 × 2 B</code>. Only <code>n_kv_heads</code> changes between the four configs — everything else is fixed by the model:</p>
+      <div class="wrapx"><table>
+        <tr><th>config</th><th>KV heads</th><th>KV / token</th><th>shrink</th><th>queries / K/V</th></tr>
+        <tr><td>MHA</td><td>32</td><td>512 KiB</td><td>1×</td><td>1</td></tr>
+        <tr><td>GQA-8</td><td>8</td><td>128 KiB</td><td>4×</td><td>4</td></tr>
+        <tr><td>GQA-4</td><td>4</td><td>64 KiB</td><td>8×</td><td>8</td></tr>
+        <tr><td>MQA</td><td>1</td><td>16 KiB</td><td>32×</td><td>32</td></tr>
+      </table></div>
+      <p><b>Full cache at seq 8,192, batch 1 (fp16):</b> MHA <code>512 KiB × 8192 = 4.0 GiB</code> (4.29 GB); GQA-8 <code>1.0 GiB</code> (1.07 GB); GQA-4 <code>0.5 GiB</code>; MQA <code>0.13 GiB</code> (134 MB). The shrink is exactly <code>n_heads / n_kv_heads = 32 / n_kv</code>.</p>
+      <p><b>Only the K and V are shared.</b> Each query head still computes its <i>own</i> Query and its <i>own</i> attention weights over the shared Keys/Values, so the model keeps most of its expressiveness. The queries in the diagram above never merge — only the cyan K/V chips do. This is why GQA is nearly-free memory: the thing that grows the cache (K/V per head, Part 2 · lesson 3) is exactly the thing GQA pools.</p>
+      <p><b>Tie-back:</b> <code>kv-memory.html</code> named this lever — "cut n_kv_heads 32→8, the cache shrinks 4× with no change to the query side." This page is that lever with the dial in your hand.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Fewer KV heads means fewer attention heads — a smaller, weaker model.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The <b>query</b> heads are unchanged — all 32 still attend independently. Only the <b>Key/Value</b> heads are shared. You lose a little precision in what's attended to, and shrink the cache up to <b>32×</b>.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>The KV cache scales with the number of <b>KV heads</b>, not query heads. Sharing 32 query heads over <code class="inl">n_kv</code> K/V heads shrinks the cache by exactly <b>32 / n_kv</b> — 4× at GQA-8, 32× at MQA — while every query head still runs its own attention.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">GQA with 32 query heads and 8 KV heads shrinks the KV cache by…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">8× — one factor per KV head.</button>
+      <button class="opt" data-correct="1">4× — the cache scales with KV heads, and 32 / 8 = 4.</button>
+      <button class="opt" data-correct="0">not at all — the query heads are unchanged.</button>
+    </div>
+    <div class="why"><b>Why:</b> the KV cache stores K/V per <b>KV head</b>; sharing 32 query heads over 8 KV heads stores 4× fewer K/V, so the cache shrinks by <code class="inl">n_heads / n_kv_heads = 32/8 = 4×</code>. The queries stay independent — they just point at pooled Keys/Values.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="gpu-anatomy.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">What a GPU actually is</div></a>
+  <a href="flash-attention.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">FlashAttention: never write the n×n matrix</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course-data-p2.js"></script>
+<script src="course-data-p3.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Grouped-query attention — KV cache sized LIVE from the shared preset.
+   Nothing is stored: every toggle/slider re-evaluates the GQA helpers.
+   Globals: MODEL (p2), GQA / gqaKvBytesPerToken / gqaKvCacheBytes /
+            gqaShrink (p3), GPU.vram (p2).
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+
+  const SEQS  = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
+  const VRAM  = GPU.vram;            // 80e9 bytes (80 GB GPU line)
+  const BYTES = 2;                   // fp16 KV
+
+  let cfgIdx = 1;                    // -> GQA-8
+  let seqIdx = 4;                    // -> 8192
+  let batch  = 1;
+
+  /* ---- formatting helpers ---- */
+  const commas = (n)=> Math.round(n).toLocaleString('en-US');
+  function gb(bytes){ const g = bytes/1e9; return (g<10 ? g.toFixed(2) : g.toFixed(1)) + ' GB'; }
+  function gib(bytes){                         // binary GiB (number only)
+    const g = bytes/Math.pow(2,30);
+    if(g >= 10) return g.toFixed(0);
+    if(g >= 1)  return g.toFixed(1);
+    return g.toFixed(2);
+  }
+  function kib(bytes){ const k = bytes/1024; return Number.isInteger(k) ? k.toString() : k.toFixed(1); }
+
+  /* ---- build the segmented config toggle from GQA.configs ---- */
+  const cfgWrap = $('#cfg');
+  GQA.configs.forEach((c, i)=>{
+    const b = document.createElement('button');
+    b.className = 'seg' + (i===cfgIdx ? ' active' : '');
+    b.dataset.idx = i;
+    b.innerHTML = c.name + '<small>' + c.n_kv + ' KV</small>';
+    cfgWrap.appendChild(b);
+  });
+
+  /* ---- head-grouping diagram: 32 query dots bracketed into n_kv groups ---- */
+  function drawHeads(n_kv){
+    const total    = MODEL.n_heads;          // 32 query heads
+    const perGroup = total / n_kv;           // 1 / 4 / 8 / 32
+    const groups   = $('#hgGroups');
+    groups.innerHTML = '';
+    // dot grid columns: keep groups compact & roughly square
+    const cols = Math.min(perGroup, Math.ceil(Math.sqrt(perGroup)) || 1);
+    for(let g=0; g<n_kv; g++){
+      const grp = document.createElement('div');
+      grp.className = 'hg-group';
+      const q = document.createElement('div');
+      q.className = 'hg-queries';
+      q.style.gridTemplateColumns = 'repeat(' + cols + ', 9px)';
+      for(let d=0; d<perGroup; d++){
+        const dot = document.createElement('span');
+        dot.className = 'hg-q';
+        q.appendChild(dot);
+      }
+      const link = document.createElement('div'); link.className = 'hg-link';
+      const kv = document.createElement('div');
+      kv.className = 'hg-kv';
+      kv.textContent = 'K/V';
+      grp.appendChild(q); grp.appendChild(link); grp.appendChild(kv);
+      groups.appendChild(grp);
+    }
+  }
+
+  /* ---- the one computation, from the shared p3 helpers ---- */
+  function recompute(){
+    const cfg   = GQA.configs[cfgIdx];
+    const n_kv  = cfg.n_kv;
+    const seq   = SEQS[seqIdx];
+
+    const perTok   = gqaKvBytesPerToken(MODEL, n_kv, BYTES);            // bytes/token, all layers
+    const total    = gqaKvCacheBytes(MODEL, n_kv, seq, batch, BYTES);   // full cache bytes
+    const shrink   = gqaShrink(MODEL, n_kv);                            // n_heads / n_kv
+    const sharedBy = MODEL.n_heads / n_kv;                             // query heads per K/V
+    const mhaTotal = gqaKvCacheBytes(MODEL, MODEL.n_heads, seq, batch, BYTES); // baseline
+
+    /* --- control labels --- */
+    $('#cfgOut').textContent   = cfg.name + ' · ' + n_kv + ' KV';
+    $('#seqOut').textContent   = commas(seq);
+    $('#batchOut').textContent = batch;
+
+    /* --- diagram --- */
+    drawHeads(n_kv);
+    $('#hgCap').innerHTML =
+      '<b>' + n_kv + '</b> K/V head' + (n_kv===1?'':'s') + ' · each shared by ' +
+      '<span class="vi">' + sharedBy + '</span> of the <span class="vi">32</span> query heads';
+
+    /* --- readouts --- */
+    $('#rTok').innerHTML    = kib(perTok) + ' <small>KiB</small>';
+    $('#rTot').innerHTML    = gib(total) + ' <small>GiB · ' + gb(total) + '</small>';
+    $('#rShrink').innerHTML = shrink + '<small>×</small>';
+    $('#rShared').textContent = sharedBy;
+
+    /* --- comparison bar (track scaled so MHA baseline = 100%) --- */
+    $('#curLab').innerHTML  = 'this config<br><b>' + cfg.name + '</b>';
+    $('#valBase').innerHTML = '<b>' + gib(mhaTotal) + ' GiB</b>';
+    $('#valCur').innerHTML  = '<b>' + gib(total) + ' GiB</b> <span style="color:var(--muted-2)">(÷' + shrink + ')</span>';
+    $('#barBase').style.width = '100%';
+    $('#barCur').style.width  = (total / mhaTotal * 100) + '%';
+
+    /* 80 GB line sits on the MHA-baseline track: visible only once MHA > 80 GB */
+    const line = $('#gpuLine');
+    if(mhaTotal > VRAM){
+      line.classList.remove('hidden');
+      line.style.left = (VRAM / mhaTotal * 100) + '%';
+    } else {
+      line.classList.add('hidden');
+    }
+
+    /* --- live formula, numbers substituted --- */
+    $('#formula').innerHTML =
+      '<div><span class="lab">kv/token =</span> ' +
+        '<span class="fixed">2</span> <span class="op">×</span> ' +
+        '<span class="fixed">' + MODEL.layers + '</span> <span class="lab">layers</span> <span class="op">×</span> ' +
+        '<b>' + n_kv + '</b> <span class="lab">kv_heads</span> <span class="op">×</span> ' +
+        '<span class="fixed">' + MODEL.head_dim + '</span> <span class="lab">head_dim</span> <span class="op">×</span> ' +
+        '<span class="fixed">' + BYTES + '</span> <span class="lab">B</span> ' +
+        '<span class="op">=</span> <b>' + kib(perTok) + ' KiB</b></div>' +
+      '<div class="row2"><span class="lab">cache =</span> kv/token <span class="op">×</span> ' +
+        '<b>' + commas(seq) + '</b> <span class="lab">seq</span> <span class="op">×</span> ' +
+        '<b>' + batch + '</b> <span class="lab">batch</span> ' +
+        '<span class="op">=</span> <b>' + gib(total) + ' GiB</b>' +
+        ' &nbsp;·&nbsp; <span class="lab">shrink =</span> ' +
+        '<span class="fixed">' + MODEL.n_heads + '</span> <span class="op">/</span> <b>' + n_kv + '</b> ' +
+        '<span class="op">=</span> <b>' + shrink + '×</b></div>';
+  }
+
+  /* ---- wire controls ---- */
+  cfgWrap.addEventListener('click', e=>{
+    const b = e.target.closest('.seg'); if(!b) return;
+    cfgIdx = +b.dataset.idx;
+    cfgWrap.querySelectorAll('.seg').forEach(s=> s.classList.toggle('active', s===b));
+    recompute();
+  });
+  $('#seq').addEventListener('input', e=>{ seqIdx = +e.target.value; recompute(); });
+  $('#batch').addEventListener('input', e=>{ batch = +e.target.value; recompute(); });
+
+  recompute();
+})();
+</script>
+</body>
+</html>
