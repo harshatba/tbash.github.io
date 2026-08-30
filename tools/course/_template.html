@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LESSON TITLE — LLM Visual Course</title>
+<meta name="description" content="ONE SENTENCE describing exactly what this single concept teaches.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+  .demo-box{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;min-height:80px;align-items:center}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">NN · Lesson title</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson NN</span>
+  <h1>The <span class="amber">one concept</span> this page teaches</h1>
+  <p class="lede">A single, plain-language sentence that frames the one idea. No jargon before it is earned.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~4 min</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>none</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Two or three short sentences that set up the idea in concrete terms before the widget. Keep it to <span class="strong-ink">one concept</span>.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Poke it · what the widget invites</span><button class="btn play" id="replay"><span class="ico"></span>Replay</button></div>
+    <div class="demo-box" id="demo"><!-- interactive widget renders here --></div>
+    <p class="stage-note"><span class="key amber">TRY →</span> Tell the reader exactly what to click/drag and what to watch change.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD (optional numbers) ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>Concrete, tiny, real example with real (small) numbers so a curious engineer can see the mechanism, e.g. <code>[0.2, -1.1, 0.7]</code>.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">A tempting-but-wrong mental model.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The accurate mechanism, stated plainly.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>The <b>one sentence</b> a reader should remember from this page.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">A question that checks the one idea.</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">A plausible wrong answer.</button>
+      <button class="opt" data-correct="1">The right answer.</button>
+      <button class="opt" data-correct="0">Another distractor.</button>
+    </div>
+    <div class="why"><b>Why:</b> one-sentence explanation shown after they answer.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="PREV.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Previous lesson title</div></a>
+  <a href="NEXT.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Next lesson title</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course.js" defer></script>
+<script>
+  /* page-specific interactivity */
+</script>
+</body>
+</html>
