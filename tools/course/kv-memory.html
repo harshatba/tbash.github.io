@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KV-Cache Memory — LLM Visual Course</title>
+<meta name="description" content="Size the KV cache live: 2 × layers × heads × head_dim × sequence × batch × bytes. It grows linearly with context and concurrency until it outweighs the model itself.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* control panel */
+  .ctrls{display:grid;grid-template-columns:1fr 1fr;gap:20px 30px;margin:4px 0 26px}
+  @media(max-width:620px){.ctrls{grid-template-columns:1fr;gap:18px}}
+  .ctl .clab{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--muted);display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:5px}
+  .ctl .clab b{color:var(--cyan);font-size:14px}
+  input[type=range]{width:100%;accent-color:var(--cyan);height:24px;cursor:pointer}
+  input[type=range]:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}
+
+  /* precision toggle (segmented) */
+  .toggle{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s}
+  .seg:hover{border-color:var(--line-strong);color:var(--ink)}
+  .seg.active{background:var(--cyan);color:#04201d;border-color:var(--cyan)}
+  .seg:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+  /* bottleneck badges (shared visual language: rose = capacity) */
+  .bneck{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px;border:1px solid;white-space:nowrap}
+  .bn-cap{color:var(--rose);border-color:rgba(255,122,138,.5);background:rgba(255,122,138,.1)}
+  .bn-cap.hidden{display:none}
+
+  /* the tank */
+  .tankwrap{position:relative;margin:38px 0 12px}
+  .tank{width:100%;height:32px;background:var(--bg-2);border:1px solid var(--line);border-radius:9px;overflow:hidden;position:relative}
+  .tank .seg-bar{position:absolute;top:0;height:100%;transition:width .55s cubic-bezier(.2,.8,.2,1),left .55s cubic-bezier(.2,.8,.2,1)}
+  .tank .seg-w{left:0;background:linear-gradient(90deg,#e85f70,var(--rose))}
+  .tank .seg-kv{background:linear-gradient(90deg,#2ea89b,var(--cyan))}
+  .tankwrap.over .tank{box-shadow:0 0 0 1px var(--rose),0 0 20px rgba(255,122,138,.35)}
+  @media(prefers-reduced-motion:reduce){.tank .seg-bar{transition:none}}
+  .gpu-line{position:absolute;top:-9px;bottom:-9px;width:2px;background:var(--amber);left:80%;z-index:4}
+  .gpu-line .glab{position:absolute;top:-17px;left:5px;font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;color:var(--amber);white-space:nowrap}
+  .tank-scale{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted-2);margin-top:6px}
+
+  /* tank legend */
+  .tlegend{display:flex;gap:20px;flex-wrap:wrap;margin:14px 0 4px;font-family:var(--mono);font-size:12px}
+  .tlegend .item{display:flex;align-items:center;gap:8px;color:var(--muted)}
+  .tlegend .sw{width:13px;height:13px;border-radius:3px;flex:none}
+  .tlegend .sw.w{background:var(--rose)} .tlegend .sw.kv{background:var(--cyan)}
+  .tlegend b{color:var(--ink)}
+  .tlegend .total{margin-left:auto}
+  .tlegend .total.bad b{color:var(--rose)}
+
+  /* readouts */
+  .reads{display:flex;gap:34px;flex-wrap:wrap;margin:24px 0 6px}
+  .read .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2)}
+  .read .v{font-family:var(--mono);font-size:1.7rem;color:var(--ink);line-height:1.1;margin-top:3px}
+  .read .v small{font-size:.42em;color:var(--muted-2);letter-spacing:.02em}
+  .read .v.cy{color:var(--cyan)} .read .v.rs{color:var(--rose)} .read .v.am{color:var(--amber)}
+
+  /* live formula strip */
+  .formula{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:24px;overflow-x:auto}
+  .formula .lab{color:var(--muted-2)}
+  .formula .op{color:var(--cyan)}
+  .formula b{color:var(--cyan)}
+  .formula .fixed{color:var(--muted-2)}
+
+  /* hood table */
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--cyan)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part2">Part 2 · How LLMs Run Fast</a><span class="sep">/</span>
+    <span class="here">03 · KV-cache memory</span>
+  </nav>
+  <span class="eyebrow">Part 2 · Lesson 3/8</span>
+  <h1>The cache grows with every token — and eats <span class="cyan">VRAM</span></h1>
+  <p class="lede">The KV cache buys speed by storing every past token's Keys and Values. That storage is a clean formula that scales linearly with context length and concurrency — until, at long context, the cache outweighs the model itself.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>sizing the cache, live</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Last page the cache saved us from recomputing the past — but that stored Key/Value has to live somewhere, and that somewhere is GPU memory. The bill is a clean formula:</p>
+    <p><code class="inl">kv_bytes = 2 (K and V) × layers × n_kv_heads × head_dim × seq_len × batch × bytes</code>.</p>
+    <p>For our 7B preset, <span class="strong-ink">n_kv_heads × head_dim = d_model = 4096</span>, so that's <b class="strong-ink">512 KiB per token</b> across all 32 layers — and it grows <span class="cyan">linearly</span> with the sequence length and with the number of concurrent requests you're serving.</p>
+    <p>At long context the cache <span class="strong-ink">outweighs the model</span>: 128k tokens is roughly <b class="strong-ink">69 GB</b> of cache against just 13 GB of fp16 weights. That is why long chats and big batches get expensive — and what paging (next lesson) and KV quantization are built to tame.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label">
+      <span>Size the KV cache · computed live</span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <span class="bneck bn-cap">capacity</span>
+        <span class="bneck bn-cap hidden" id="wontFit">won't fit</span>
+      </span>
+    </div>
+
+    <!-- controls -->
+    <div class="ctrls">
+      <div class="ctl">
+        <div class="clab"><span>sequence length (context)</span><b id="seqOut">4,096</b></div>
+        <input type="range" id="seq" min="0" max="8" step="1" value="3" aria-label="sequence length">
+      </div>
+      <div class="ctl">
+        <div class="clab"><span>concurrent requests · batch</span><b id="batchOut">1</b></div>
+        <input type="range" id="batch" min="1" max="32" step="1" value="1" aria-label="batch size">
+      </div>
+      <div class="ctl">
+        <div class="clab"><span>layers (cache depth)</span><b id="layOut">32</b></div>
+        <input type="range" id="lay" min="1" max="32" step="1" value="32" aria-label="layers">
+      </div>
+      <div class="ctl">
+        <div class="clab"><span>KV precision</span><b id="precOut">fp16 · 2 B</b></div>
+        <div class="toggle" id="prec" role="group" aria-label="KV precision">
+          <button class="seg active" data-prec="fp16">fp16</button>
+          <button class="seg" data-prec="int8">int8</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- the tank -->
+    <div class="tankwrap" id="tankwrap">
+      <div class="tank">
+        <div class="seg-bar seg-w" id="segW"></div>
+        <div class="seg-bar seg-kv" id="segKV"></div>
+      </div>
+      <div class="gpu-line"><span class="glab">80 GB GPU</span></div>
+    </div>
+    <div class="tank-scale"><span>0</span><span>100 GB</span></div>
+    <div class="tlegend">
+      <span class="item"><span class="sw w"></span>weights (fp16, fixed) <b id="wGB">13.2 GB</b></span>
+      <span class="item"><span class="sw kv"></span>KV cache <b id="kvLeg">2.15 GB</b></span>
+      <span class="item total" id="totItem">total <b id="totGB">15.4 GB</b> / 80 GB</span>
+    </div>
+
+    <!-- readouts -->
+    <div class="reads">
+      <div class="read"><div class="k">KV cache</div><div class="v cy" id="rKV">2.0 <small>GiB · 2.15 GB</small></div></div>
+      <div class="read"><div class="k">per token</div><div class="v cy" id="rTok">512 <small>KiB</small></div></div>
+      <div class="read"><div class="k">% of 80 GB GPU</div><div class="v am" id="rPct">2.7<small>%</small></div></div>
+    </div>
+
+    <!-- live formula -->
+    <div class="formula" id="formula"></div>
+
+    <p class="stage-note"><span class="key cyan">TRY →</span> Drag <b>sequence length</b> to <b>128k</b> — the cyan cache overruns the amber 80 GB line and passes the rose weights (the <b>won't fit</b> flag lights). Flip <b>KV precision</b> to <b>int8</b> to halve it, or raise <b>batch</b> to stack concurrent requests. Every number recomputes from the formula — nothing is stored.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p><b>Per token, all layers:</b> <code>2 × 32 layers × 32 heads × 128 head_dim × 2 B = 524,288 bytes = 512 KiB</code>. Because <code>n_kv_heads × head_dim = d_model = 4096</code>, that's just <code>2 × 4096 × 32 layers × 2 B</code> — two 4096-vectors (one K, one V) per layer, per token.</p>
+      <div class="wrapx"><table>
+        <tr><th>sequence</th><th>batch</th><th>KV (fp16)</th><th>vs 13.2 GB weights</th></tr>
+        <tr><td>4,096</td><td>1</td><td>2.0 GiB (2.15 GB)</td><td>0.16×</td></tr>
+        <tr><td>32,768</td><td>1</td><td>16.0 GiB (17.2 GB)</td><td>1.30×</td></tr>
+        <tr><td>131,072 (128k)</td><td>1</td><td>64.0 GiB (68.7 GB)</td><td>5.2× — bigger than the model</td></tr>
+        <tr><td>4,096</td><td>32</td><td>64.0 GiB (68.7 GB)</td><td>5.2× — batch does the same</td></tr>
+      </table></div>
+      <p>Switching KV to <b>int8</b> halves every row (1 byte instead of 2). At 128k the cache is <b>68.7 GB</b> — larger than the entire fp16 model — so weights + cache blow past an 80 GB card long before you hit the context limit.</p>
+      <p><b>GQA is the standard lever.</b> Grouped-query attention cuts <code>n_kv_heads</code> from 32 down to, say, 8 — Keys and Values are then shared across query heads — and the cache shrinks <b>4×</b> with no change to the query side. It's the single biggest structural saving on this formula.</p>
+      <p><b>Tie-back to Part 1 (Q15):</b> the residual-stream vector flowing through the model is <i>recomputed</i> every step and thrown away; the K/V are the <i>stored</i> part that piles up here. That's the trade the cache makes — compute for capacity.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Running out of GPU memory is all about the model's size — bigger models need more VRAM, full stop.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">At long context or high concurrency the <b>KV cache</b> — not the weights — is what runs you out of VRAM. It grows linearly with tokens × requests, and past ~64k tokens it can dwarf the model.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>The KV cache costs a <b>fixed number of bytes per token, per layer</b> — 512 KiB/token for our 7B model. Total memory scales <b>linearly</b> with sequence length and batch, so long context and big batches are memory problems, not compute problems.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">You double the context length. The KV cache…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">stays the same size — it's a fixed buffer.</button>
+      <button class="opt" data-correct="1">roughly doubles — it grows linearly with sequence length.</button>
+      <button class="opt" data-correct="0">quadruples, like the attention score matrix.</button>
+    </div>
+    <div class="why"><b>Why:</b> the cache stores a fixed number of bytes per token per layer, so total bytes scale <b>linearly</b> with tokens (and with concurrent requests). The <i>attention matrix</i> is quadratic, but the <i>cache</i> is not.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="kv-cache.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">The KV cache: don't recompute the past</div></a>
+  <a href="quantization.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Quantization: store weights in fewer bits</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course-data-p2.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   KV-cache memory — sized LIVE from the shared 7B preset + helpers.
+   Nothing is stored: every slider re-evaluates kvCacheBytes / weightBytes.
+   Globals from course-data-p2.js: MODEL, BYTES, GPU, kvCacheBytes, weightBytes.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+
+  const SEQS = [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072];
+  const TRACK_MAX = 100e9;          // tank scale: full width = 100 GB; 80 GB line at 80%
+  const VRAM = GPU.vram;            // 80e9 bytes
+
+  let seqIdx = 3;                   // -> 4096
+  let batch  = 1;
+  let layers = MODEL.layers;        // 32
+  let prec   = 'fp16';
+
+  /* ---- formatting helpers ---- */
+  const commas = (n)=> Math.round(n).toLocaleString('en-US');
+  function gb(bytes){                       // decimal GB
+    const g = bytes/1e9;
+    return (g<10 ? g.toFixed(2) : g.toFixed(1)) + ' GB';
+  }
+  function gib(bytes){                       // binary GiB (number only)
+    const g = bytes/Math.pow(2,30);
+    return g<10 ? g.toFixed(1) : g.toFixed(1).replace(/\.0$/,'');
+  }
+  function kib(bytes){                        // per-token, always < 1 MiB here
+    const k = bytes/1024;
+    return (Number.isInteger(k) ? k.toString() : k.toFixed(1));
+  }
+
+  /* ---- the one computation, from the shared helpers ---- */
+  function recompute(){
+    const seq   = SEQS[seqIdx];
+    const bytes = BYTES[prec];
+    const m     = Object.assign({}, MODEL, {layers: layers});
+
+    const kv        = kvCacheBytes(m, seq, batch, bytes);
+    const weights   = weightBytes(MODEL, BYTES.fp16);   // 13.2 GB, always full model
+    const perToken  = kv / (seq * batch);               // bytes per token (all layers)
+    const total     = kv + weights;
+    const fits      = total <= VRAM;
+
+    /* --- control labels --- */
+    $('#seqOut').textContent   = commas(seq);
+    $('#batchOut').textContent = batch;
+    $('#layOut').textContent   = layers;
+    $('#precOut').textContent  = prec + ' · ' + bytes + ' B';
+
+    /* --- readouts --- */
+    $('#rKV').innerHTML  = gib(kv) + ' <small>GiB · ' + gb(kv) + '</small>';
+    $('#rTok').innerHTML = kib(perToken) + ' <small>KiB</small>';
+    const pct = kv / VRAM * 100;
+    $('#rPct').innerHTML = (pct<10 ? pct.toFixed(1) : Math.round(pct)) + '<small>%</small>';
+    $('#rPct').className = 'v ' + (pct >= 100 ? 'rs' : 'am');
+
+    /* --- tank --- */
+    const wFrac  = Math.min(weights/TRACK_MAX, 1);
+    const kvFrac = Math.min(kv/TRACK_MAX, 1 - wFrac);
+    $('#segW').style.width  = (wFrac*100) + '%';
+    $('#segKV').style.left  = (wFrac*100) + '%';
+    $('#segKV').style.width = (kvFrac*100) + '%';
+    $('#tankwrap').classList.toggle('over', !fits);
+    $('#wontFit').classList.toggle('hidden', fits);
+
+    /* --- legend --- */
+    $('#wGB').textContent  = gb(weights);
+    $('#kvLeg').textContent = gb(kv);
+    $('#totGB').textContent = gb(total);
+    $('#totItem').classList.toggle('bad', !fits);
+    $('#totItem').innerHTML = 'total <b id="totGB">' + gb(total) + '</b> / 80 GB' + (fits ? '' : ' — over!');
+
+    /* --- live formula, numbers substituted --- */
+    const headsDim = MODEL.n_kv_heads * MODEL.head_dim;   // 4096
+    $('#formula').innerHTML =
+      '<span class="lab">kv_bytes =</span> ' +
+      '<span class="fixed">2</span> <span class="op">×</span> ' +
+      '<b>' + layers + '</b> <span class="lab">layers</span> <span class="op">×</span> ' +
+      '<span class="fixed">' + headsDim + '</span> <span class="lab">heads·dim</span> <span class="op">×</span> ' +
+      '<b>' + commas(seq) + '</b> <span class="lab">seq</span> <span class="op">×</span> ' +
+      '<b>' + batch + '</b> <span class="lab">batch</span> <span class="op">×</span> ' +
+      '<b>' + bytes + '</b> <span class="lab">B</span> ' +
+      '<span class="op">=</span> <b>' + gb(kv) + '</b> <span class="lab">(' + gib(kv) + ' GiB)</span>';
+  }
+
+  /* ---- wire controls ---- */
+  $('#seq').addEventListener('input', e=>{ seqIdx = +e.target.value; recompute(); });
+  $('#batch').addEventListener('input', e=>{ batch = +e.target.value; recompute(); });
+  $('#lay').addEventListener('input', e=>{ layers = +e.target.value; recompute(); });
+  $('#prec').addEventListener('click', e=>{
+    const b = e.target.closest('.seg'); if(!b) return;
+    prec = b.dataset.prec;
+    $('#prec').querySelectorAll('.seg').forEach(s=> s.classList.toggle('active', s===b));
+    recompute();
+  });
+
+  recompute();
+})();
+</script>
+</body>
+</html>
