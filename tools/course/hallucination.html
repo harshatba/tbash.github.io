@@ -125,7 +125,7 @@
 <section class="block wrap reveal">
   <div class="prose">
     <p>Lessons 10 and 11 turned a final vector into <span class="green">vocab-logits</span> and then, through <b class="strong-ink">softmax</b>, into next-token probabilities. That whole pipeline ranks tokens by one thing only: how <b class="strong-ink">plausible</b> each continuation is, given the patterns the model saw in training.</p>
-    <p>So when a false answer is more <b class="strong-ink">famous</b> or more <b class="strong-ink">frequent</b> than the true one, it can carry the higher logit — and win. That's hallucination, mechanically: not the model "lying," just plausibility beating truth, because <span class="rose">truth was never a term in the computation.</span></p>
+    <p>So when a false answer appeared more <b class="strong-ink">frequently in the training text</b> (a famous city said far more often than a quiet capital), it can carry the higher logit — and win. That's hallucination, mechanically: not the model "lying," just plausibility beating truth, because <span class="rose">truth was never a term in the computation.</span></p>
     <p>Below is a toy distribution for <span class="mono">"The capital of Australia is ___"</span>. <b class="strong-ink">Canberra</b> is the real capital; <b class="strong-ink">Sydney</b> is the larger, more-talked-about city — the common wrong guess. Watch which one softmax picks.</p>
   </div>
 </section>

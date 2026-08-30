@@ -75,7 +75,7 @@
   </nav>
   <span class="eyebrow">Part 1 · Lesson 11/15</span>
   <h1>Three dials on the <span class="green">next-word</span> distribution</h1>
-  <p class="lede">Softmax hands you one honest distribution over the next word. Before picking, you can <b class="strong-ink">reshape</b> it with three dials — temperature, top-k, and top-p — without ever touching the logits underneath. Every bar below is recomputed live from the same eight scores.</p>
+  <p class="lede">Softmax hands you one honest distribution over the next word. Before picking, you can <b class="strong-ink">reshape</b> it with three dials — temperature, top-k, and top-p — without ever touching the logits underneath. Every bar below is recomputed live from the same eight scores. <span class="muted">(Last page produced vocab-logits over the 7 sentence tokens; here we swap to a richer 8-candidate set for "…it was ___" so the dials have something visible to reshape — same idea, a distribution over next words.)</span></p>
   <div class="pill-row">
     <span class="meta-pill">⏱ <b>~5 min</b></span>
     <span class="meta-pill">🎚 <b>three live dials</b></span>
