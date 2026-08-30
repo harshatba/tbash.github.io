@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>How LLMs Work — Meaning &amp; Attention</title>
-<meta name="description" content="An interactive 15-lesson track: where a token's meaning-vector comes from, how attention computes, and how the vector becomes the next word — every number computed live. Then Part 2 shows how that same computation is made fast to run — KV cache, quantization, batching, speculative decoding.">
+<meta name="description" content="An interactive 15-lesson track: where a token's meaning-vector comes from, how attention computes, and how the vector becomes the next word — every number computed live. Then Part 2 shows how that same computation is made fast to run — KV cache, quantization, batching, speculative decoding. Then Part 3 · Beyond the Basics opens the systems internals and capability patterns — GPU anatomy, GQA, FlashAttention, mixture-of-experts, tool use, reasoning, RAG, and multimodal.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -87,10 +87,11 @@
 <header class="lesson-head wrap reveal">
   <span class="eyebrow">Interactive deep-dive · Part 1</span>
   <h1>How LLMs Work — <span class="cyan">Meaning</span> &amp; <span class="violet">Attention</span></h1>
-  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Fifteen short pages, one idea and one live widget each — from tokens through attention to the next-word prediction — and every number on screen is computed in front of you. Then <span class="strong-ink">Part 2 · How LLMs Run Fast</span> takes the same model and shows how it's served in milliseconds — the KV cache, quantization, paging, batching, speculative decoding, and the roofline that explains why they all help.</p>
+  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Fifteen short pages, one idea and one live widget each — from tokens through attention to the next-word prediction — and every number on screen is computed in front of you. Then <span class="strong-ink">Part 2 · How LLMs Run Fast</span> takes the same model and shows how it's served in milliseconds — the KV cache, quantization, paging, batching, speculative decoding, and the roofline that explains why they all help. Then <span class="strong-ink">Part 3 · Beyond the Basics</span> goes past the core loop — the GPU it runs on, the attention and memory tricks (GQA, FlashAttention), and the capability patterns every assistant uses (mixture-of-experts, tool use, reasoning, RAG, multimodal).</p>
   <div class="pill-row">
     <span class="meta-pill">📚 <b>Part 1 · 15 lessons</b></span>
     <span class="meta-pill">⚡ <b>Part 2 · 8 lessons</b></span>
+    <span class="meta-pill">🧩 <b>Part 3 · 8 lessons</b></span>
     <span class="meta-pill">🎚 <b>interactive</b></span>
     <span class="meta-pill">math: <b>traceable</b></span>
   </div>
@@ -370,6 +371,102 @@
         <span class="lc-body">
           <span class="lc-ttl">The roofline: moving weights, not math<span class="flag">the why</span></span>
           <span class="lc-blurb">Compute arithmetic intensity and land below the ridge point.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+  </ol>
+</section>
+
+<!-- ============ PART 3 · BEYOND THE BASICS ============ -->
+<section class="block wrap reveal" id="part3" style="padding-top:10px">
+  <h2 style="font-size:clamp(1.5rem,3.4vw,2.1rem);margin-bottom:6px">Part 3 · <span class="amber">Beyond the Basics</span></h2>
+  <p class="prose" style="margin-bottom:8px">Past the core loop: the GPU it runs on, the attention and memory tricks that scale it, and the capability patterns every assistant is built from — each one a live widget, every number still computed in front of you.</p>
+  <ol class="lesson-list">
+    <li>
+      <a class="lesson-card" href="gpu-anatomy.html">
+        <span class="lc-num">01</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">What a GPU actually is<span class="flag">the stage</span></span>
+          <span class="lc-blurb">Place weights, KV, and a Flash tile in the VRAM→SRAM hierarchy and see what fits.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="grouped-query-attention.html">
+        <span class="lc-num">02</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Share the Keys and Values (GQA)</span>
+          <span class="lc-blurb">Dial 32→8→1 KV heads and watch the cache shrink 4× → 32×.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="flash-attention.html">
+        <span class="lc-num">03</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Keep the score matrix on-chip</span>
+          <span class="lc-blurb">Tile the n×n scores into SRAM; watch 32 MiB of VRAM traffic vanish.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="mixture-of-experts.html">
+        <span class="lc-num">04</span>
+        <span class="lc-dot rose" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Many experts, a few per token</span>
+          <span class="lc-blurb">Route a real token to its top-2 experts; 47B stored, 13.6B active.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="tool-use.html">
+        <span class="lc-num">05</span>
+        <span class="lc-dot amber" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">It's still just predicting tokens</span>
+          <span class="lc-blurb">Step a token stream that emits a JSON call, runs it, injects the result.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="reasoning.html">
+        <span class="lc-num">06</span>
+        <span class="lc-dot green" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Buying accuracy with tokens</span>
+          <span class="lc-blurb">Slide thinking-tokens and watch accuracy climb, then plateau.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="rag.html">
+        <span class="lc-num">07</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Retrieve the facts, then prompt</span>
+          <span class="lc-blurb">Cosine-retrieve the top passages for a query and watch them prepend.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="multimodal.html">
+        <span class="lc-num">08</span>
+        <span class="lc-dot amber" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">An image is just more tokens</span>
+          <span class="lc-blurb">Click a patch and watch it project into an embedding in the token stream.</span>
         </span>
         <span class="lc-arrow" aria-hidden="true">→</span>
       </a>
