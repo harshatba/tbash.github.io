@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention II · How Attention Computes — LLM Visual Course</title>
+<meta name="description" content="Click a query token and watch attention compute for real: Q·K dot products become logits, softmax turns them into weights that sum to 1, and the Values blend into a new vector.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* token picker */
+  .tok-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:6px}
+  .tok{
+    font-family:var(--mono);font-size:14px;letter-spacing:.02em;
+    color:var(--muted);background:var(--bg-2);
+    border:1px solid var(--line);border-radius:9px;padding:8px 13px;cursor:pointer;transition:.16s;
+  }
+  .tok:hover{border-color:var(--line-strong);color:var(--ink)}
+  .tok.sel{color:var(--violet);border-color:var(--violet);background:rgba(157,140,255,.12);box-shadow:0 0 0 1px rgba(157,140,255,.25) inset}
+  .tok:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  .picker-cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--muted-2);text-align:center;margin:2px 0 20px}
+  .picker-cap b{color:var(--violet)}
+
+  .ctl-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:4px 0 24px}
+
+  /* stage shells */
+  .stg{border:1px solid var(--line);border-radius:14px;background:rgba(11,16,32,.42);margin:16px 0;overflow:hidden;transition:opacity .35s ease,filter .35s ease}
+  .stg-h{display:flex;align-items:center;gap:12px;padding:14px 18px}
+  .stg-num{flex:none;width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--violet);background:rgba(157,140,255,.14);border:1px solid rgba(157,140,255,.3)}
+  .stg-t{font-family:var(--disp);font-weight:600;font-size:1.02rem;color:var(--ink)}
+  .stg-t small{display:block;font-family:var(--mono);font-weight:400;font-size:11px;letter-spacing:.05em;color:var(--muted-2);margin-top:2px}
+  .stg-b{padding:2px 18px 20px;border-top:1px solid var(--line)}
+  .stg.locked{opacity:.32;filter:grayscale(.4)}
+  .stg.locked .stg-b{display:none}
+  .stg.locked .stg-h::after{content:"locked · step to reveal";margin-left:auto;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--muted-2)}
+
+  /* stage 1 — worked dot-product rows */
+  .score-tbl{display:flex;flex-direction:column;gap:4px;margin-top:12px}
+  .score-row{display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;font-family:var(--mono);font-size:12.5px;padding:6px 10px;border-radius:8px;background:var(--bg-2);border:1px solid transparent}
+  .score-row.hi{border-color:rgba(157,140,255,.4);background:rgba(157,140,255,.08)}
+  .score-row .sr-tok{color:var(--amber)}
+  .score-row .sr-math{color:var(--muted);white-space:nowrap;overflow-x:auto}
+  .score-row .sr-math .op{color:var(--violet)}
+  .score-row .sr-val{color:var(--ink);font-weight:600;text-align:right}
+  @media(max-width:640px){
+    .score-row{grid-template-columns:56px 1fr;grid-template-areas:"tok val" "math math";row-gap:4px}
+    .score-row .sr-tok{grid-area:tok}.score-row .sr-val{grid-area:val}.score-row .sr-math{grid-area:math;font-size:11.5px}
+  }
+
+  /* stage 2 — softmax bars */
+  .wt-tbl{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+  .wt-row{display:grid;grid-template-columns:64px 52px 1fr 52px;gap:10px;align-items:center;font-family:var(--mono);font-size:12.5px}
+  .wt-row .wr-tok{color:var(--amber)}
+  .wt-row .wr-score{color:var(--muted-2);font-size:11.5px;text-align:right}
+  .wt-row .wr-pct{color:var(--ink);font-weight:600;text-align:right}
+  .wt-row.hi .wr-tok,.wt-row.hi .wr-pct{color:var(--violet)}
+  .bar-track{height:16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .bar-fill{height:100%;width:0;background:linear-gradient(90deg,rgba(157,140,255,.55),var(--violet));border-radius:5px 0 0 5px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  @media(prefers-reduced-motion:reduce){.bar-fill{transition:none}}
+  .wt-sum{margin-top:14px;font-family:var(--mono);font-size:12.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+  .wt-sum b{color:var(--green)}
+  .softmax-note{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:8px;line-height:1.5}
+  .softmax-note b{color:var(--violet)}
+
+  /* stage 3 — arcs */
+  .arc-wrap{margin-top:10px}
+  .arc-svg{width:100%;height:auto;display:block;max-width:560px;margin:0 auto}
+  .arc-svg .node{fill:var(--bg-2);stroke:var(--line-strong)}
+  .arc-svg .node.q{fill:rgba(157,140,255,.16);stroke:var(--violet)}
+  .arc-svg .node.top{stroke:var(--violet)}
+  .arc-svg .nlabel{font-family:var(--mono);font-size:12px;fill:var(--muted)}
+  .arc-svg .nlabel.q{fill:var(--violet);font-weight:600}
+  .arc-svg .nlabel.top{fill:var(--violet)}
+  .arc-svg .npct{font-family:var(--mono);font-size:10.5px;fill:var(--muted-2)}
+  .arc-svg .arc{fill:none;stroke:var(--violet);stroke-linecap:round}
+  .arc-cap{font-family:var(--mono);font-size:11px;color:var(--muted-2);text-align:center;margin-top:8px;line-height:1.5}
+  .arc-cap b{color:var(--violet)}
+
+  /* stage 4 — blend */
+  .blend-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+  .vtile{flex:1 1 110px;min-width:110px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:center}
+  .vtile .vlab{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .vtile .vnum{font-family:var(--mono);font-size:1.5rem;font-weight:600;color:var(--cyan);margin-top:6px}
+  .vtile.dom{border-color:rgba(67,214,200,.45);background:rgba(67,214,200,.08)}
+  .blend-work{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:14px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:11px 13px;overflow-x:auto}
+  .blend-work .op{color:var(--violet)}
+  .blend-work .lab{color:var(--muted-2)}
+  .blend-read{margin-top:14px;font-size:.98rem;color:var(--ink);line-height:1.6}
+  .blend-read .amber{color:var(--amber)}.blend-read .cyan{color:var(--cyan)}
+
+  .self-note{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:12px;line-height:1.55;border-left:2px solid var(--line-strong);padding-left:12px}
+
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500;text-align:right}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--amber)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">6 · Attention II — how attention computes</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 6/7</span>
+  <h1>How <span class="violet">attention</span> actually computes</h1>
+  <p class="lede">Click a query token and watch the whole pipeline run on real numbers: dot products become raw scores, softmax turns them into weights that sum to 1, and the Values blend into a brand-new vector. Nothing here is looked up — every number falls out of arithmetic you can trace.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~7 min</b></span>
+    <span class="meta-pill">🎚 <b>the full pipeline, computed</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Last page we built three vectors from every token's embedding: a <span class="violet">Query</span> (what it's looking for), a <span class="violet">Key</span> (what it advertises), and a <span class="violet">Value</span> (the content it hands over). Now they get used.</p>
+    <p>To decide how much token <b class="strong-ink">A</b> should listen to token <b class="strong-ink">B</b>, take A's Query and B's Key and <b class="strong-ink">dot them together</b>: <code class="inl">q·k</code>. A bigger dot product means the two vectors point the same way — a better match, a higher raw score. Those raw scores are the <span class="violet">logits</span> of the attention softmax.</p>
+    <p>Run all the scores through <b class="strong-ink">softmax</b> and you get positive fractions that add up to 1 — the <span class="violet">attention weights</span>. This is the exact same softmax that turns next-token logits into probabilities in the classic temperature widget. Finally, A's new vector is the <b class="strong-ink">weighted blend of every token's Value</b>: a token literally becomes a mix of what it paid attention to.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>The attention pipeline · computed live</span></div>
+
+    <div class="tok-row" id="tokRow"><!-- token chips injected --></div>
+    <div class="picker-cap">query token: <b id="qName">it</b> — every number below is <code class="inl" style="font-size:.82em">q·k → softmax → blend</code> for this token</div>
+
+    <div class="ctl-row">
+      <button class="btn" id="btnStep">Step ▸</button>
+      <button class="btn play" id="btnRun"><span class="ico"></span>Run</button>
+      <button class="btn" id="btnAll">Show all</button>
+    </div>
+
+    <!-- Stage 1 -->
+    <div class="stg" data-stage="1">
+      <div class="stg-h"><span class="stg-num">1</span><div class="stg-t">Raw scores — the logits<small>score(j) = q · kⱼ   (raw dot product, no scaling)</small></div></div>
+      <div class="stg-b"><div class="score-tbl" id="s1"></div></div>
+    </div>
+
+    <!-- Stage 2 -->
+    <div class="stg" data-stage="2">
+      <div class="stg-h"><span class="stg-num">2</span><div class="stg-t">Softmax → attention weights<small>weight(j) = e^score(j) / Σ e^score   →   fractions that sum to 1</small></div></div>
+      <div class="stg-b">
+        <div class="wt-tbl" id="s2"></div>
+        <div class="wt-sum"><span>running sum of all weights</span><span>Σ = <b id="s2sum">100.0%</b></span></div>
+        <div class="softmax-note"><b>Same operation as next-token probability.</b> These are the identical <code class="inl" style="font-size:.82em">e^z / Σe^z</code> fractions the temperature widget uses — here they weight attention instead of picking a word.</div>
+      </div>
+    </div>
+
+    <!-- Stage 3 -->
+    <div class="stg" data-stage="3">
+      <div class="stg-h"><span class="stg-num">3</span><div class="stg-t">The weights, drawn as arcs<small>arc thickness ∝ computed attention weight</small></div></div>
+      <div class="stg-b">
+        <div class="arc-wrap">
+          <svg class="arc-svg" id="s3" viewBox="0 0 560 300" role="img" aria-label="Attention arcs from the query token to every token, thickness proportional to weight."></svg>
+        </div>
+        <div class="arc-cap" id="s3cap"></div>
+      </div>
+    </div>
+
+    <!-- Stage 4 -->
+    <div class="stg" data-stage="4">
+      <div class="stg-h"><span class="stg-num">4</span><div class="stg-t">Blend the Values into a new vector<small>out = Σⱼ weightⱼ · vⱼ   (element-wise)</small></div></div>
+      <div class="stg-b">
+        <div class="blend-grid" id="s4tiles"></div>
+        <div class="blend-work" id="s4work"></div>
+        <div class="blend-read" id="s4read"></div>
+        <div class="self-note" id="s4self"></div>
+      </div>
+    </div>
+
+    <p class="stage-note"><span class="key violet">TRY →</span> Click a different token (try <b>The</b> or <b>tired</b>) — all four stages recompute from scratch. Hit <b>Run</b> to animate the pipeline one stage at a time, or <b>Step</b> to walk it yourself. Watch the <b>cat</b> arc: for <b>it</b> it's always the fattest outward one.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers (query = <span style="color:var(--amber)">it</span>)</summary>
+    <div class="hood-body">
+      <p><code>e_it = [0.8, 0.1, 0.2, 0.3]</code>. Its Query is <code>q = Wq·e_it = [2·0.8+1·0.3, 2·0.1, 1·0.2, 1·0.3] = [1.9, 0.2, 0.2, 0.3]</code>.</p>
+      <p>The seven raw scores are <code>q·kⱼ</code> for each token's Key (Keys have their function dim damped by ×0.3):</p>
+      <div class="wrapx"><table>
+        <tr><th>token</th><th>q · k written out</th><th>score</th><th>e^score</th><th>weight</th></tr>
+        <tr><td>cat</td><td>1.9·1.0 + 0.2·0.2 + 0.2·0.1 + 0.3·0</td><td>1.96</td><td>7.10</td><td>35.8%</td></tr>
+        <tr><td>it</td><td>1.9·0.8 + 0.2·0.1 + 0.2·0.2 + 0.3·0.09</td><td>1.61</td><td>4.99</td><td>25.2%</td></tr>
+        <tr><td>tired</td><td>1.9·0.3 + 0.2·0.1 + 0.2·1.0 + 0.3·0</td><td>0.79</td><td>2.20</td><td>11.1%</td></tr>
+        <tr><td>sat</td><td>1.9·0.2 + 0.2·1.0 + 0.2·0.1 + 0.3·0</td><td>0.60</td><td>1.82</td><td>9.2%</td></tr>
+        <tr><td>was</td><td>1.9·0.1 + 0.2·0.5 + 0.2·0.4 + 0.3·0.06</td><td>0.39</td><td>1.47</td><td>7.4%</td></tr>
+        <tr><td>because</td><td>1.9·0 + 0.2·0.1 + 0.2·0.2 + 0.3·0.27</td><td>0.14</td><td>1.15</td><td>5.8%</td></tr>
+        <tr><td>The</td><td>1.9·0 + 0.2·0 + 0.2·0 + 0.3·0.3</td><td>0.09</td><td>1.09</td><td>5.5%</td></tr>
+      </table></div>
+      <p>The <code>e^score</code> column sums to <code>19.83</code>; each weight is that row's <code>e^score</code> divided by 19.83 (e.g. <code>7.10 / 19.83 = 0.358 = 35.8%</code>). The seven weights add to <code>1.00</code>.</p>
+      <p>Blending the Values (each token's <code>v = Wv·e</code>, dim 3 halved) with those weights gives <code>out ≈ [0.62, 0.24, 0.25, 0.10]</code> — animacy-dominant (from <code>cat</code>) with a state bump (from <code>tired</code>).</p>
+      <p><b>The √d note:</b> real transformers divide each score by <code>√(key-dimension)</code> before softmax to keep the numbers from getting too large — with d = 4 that's ÷2. It changes the <i>sharpness</i> of the weights but not which token wins. We skip it here so the arithmetic stays clean.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The attention weights are looked up in a table or hand-set by the designer.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">They're computed every single step — dot products of Queries and Keys, run through softmax. Change one vector and every weight downstream changes. (This widget just proved it: edit the toy data and the arcs re-draw.)</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>Attention is three ops in a row: <b>Q·K dot products</b> → <b>softmax</b> → <b>weighted blend of Values</b>. The output vector for a token is literally a mixture of the tokens it scored highest.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">An attention weight of 0.36 from <code class="inl">it</code> to <code class="inl">cat</code> means…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0"><code class="inl">cat</code> is 36% likely to be the next word.</button>
+      <button class="opt" data-correct="1">36% of <code class="inl">it</code>'s attention — and so 36% of <code class="inl">cat</code>'s Value — goes into <code class="inl">it</code>'s new vector.</button>
+      <button class="opt" data-correct="0"><code class="inl">cat</code> and <code class="inl">it</code> are 36% spelled the same.</button>
+    </div>
+    <div class="why"><b>Why:</b> softmax'd Q·K scores are the fractions of each token's Value that get blended in; they sum to 1. It's a routing weight, not a next-word probability.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="attention-qkv.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Q, K, V: three vectors from one token</div></a>
+  <a href="attention-heads.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Many heads, many kinds of attention</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Attention II — the full pipeline, COMPUTED live from E + Wq/Wk/Wv.
+   No stored weights: q·k -> softmax -> weighted blend of V, every click.
+   Globals from course-data.js: TOKENS, E, Wq, Wk, Wv, DIM_LABELS,
+   matvec, dot, softmax, attend.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+  const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // trim a number to <=2 decimals, drop trailing zeros ("1.90"->"1.9","0.00"->"0")
+  const trim = (n)=>{ let s = (Math.round(n*100)/100).toFixed(2); s = s.replace(/\.?0+$/,''); return s==='-0'?'0':s; };
+  const f2 = (n)=> n.toFixed(2);
+  const pct = (n)=> (n*100).toFixed(1)+'%';
+
+  // Precompute each token's Key and Value once (independent of the query).
+  const K = TOKENS.map(t => matvec(Wk, E[t]));
+  const V = TOKENS.map(t => matvec(Wv, E[t]));
+
+  let query = 'it';                 // selected query token
+  let revealed = 4;                 // how many stages are visible (1..4)
+  let runTimer = null;
+
+  /* ---------- token picker ---------- */
+  const tokRow = $('#tokRow');
+  TOKENS.forEach(t=>{
+    const b = document.createElement('button');
+    b.className = 'tok' + (t===query?' sel':'');
+    b.textContent = t;
+    b.setAttribute('aria-pressed', t===query?'true':'false');
+    b.addEventListener('click', ()=>{ query = t; syncChips(); render(); });
+    tokRow.appendChild(b);
+  });
+  function syncChips(){
+    Array.from(tokRow.children).forEach(b=>{
+      const on = b.textContent===query;
+      b.classList.toggle('sel', on);
+      b.setAttribute('aria-pressed', on?'true':'false');
+    });
+    $('#qName').textContent = query;
+  }
+
+  /* ---------- compute everything for the current query ---------- */
+  function compute(){
+    const qi = TOKENS.indexOf(query);
+    const q  = matvec(Wq, E[query]);
+    const scores  = TOKENS.map((t,j)=> dot(q, K[j]));
+    const weights = softmax(scores);
+    const out = [0,1,2,3].map(d => TOKENS.reduce((s,_,j)=> s + weights[j]*V[j][d], 0));
+    // rank order for arcs / reads (descending by weight)
+    const order = TOKENS.map((t,j)=>({t,j,w:weights[j],s:scores[j]})).sort((a,b)=>b.w-a.w);
+    // top OUTWARD token (excluding the query itself)
+    const outward = order.filter(o=>o.t!==query);
+    return {qi,q,scores,weights,out,order,outward};
+  }
+
+  /* ---------- Stage 1: worked dot-product rows ---------- */
+  function renderS1(C){
+    const box = $('#s1'); box.innerHTML='';
+    TOKENS.forEach((t,j)=>{
+      const terms = C.q.map((qc,i)=> `${trim(qc)}<span class="op">·</span>${trim(K[j][i])}`).join(' + ');
+      const row = document.createElement('div');
+      row.className = 'score-row' + (j===C.order[0].j?' hi':'');
+      row.innerHTML =
+        `<span class="sr-tok">${t}</span>`+
+        `<span class="sr-math">${terms} =</span>`+
+        `<span class="sr-val">${f2(C.scores[j])}</span>`;
+      box.appendChild(row);
+    });
+  }
+
+  /* ---------- Stage 2: softmax bars + running sum ---------- */
+  function renderS2(C, animate){
+    const box = $('#s2'); box.innerHTML='';
+    const maxW = Math.max(...C.weights);
+    TOKENS.forEach((t,j)=>{
+      const row = document.createElement('div');
+      row.className = 'wt-row' + (j===C.order[0].j?' hi':'');
+      row.innerHTML =
+        `<span class="wr-tok">${t}</span>`+
+        `<span class="wr-score">${f2(C.scores[j])}</span>`+
+        `<div class="bar-track"><div class="bar-fill" data-w="${C.weights[j]/maxW}"></div></div>`+
+        `<span class="wr-pct">${pct(C.weights[j])}</span>`;
+      box.appendChild(row);
+    });
+    // fill bars (widths relative to the biggest weight, so the winner spans the track)
+    const fills = box.querySelectorAll('.bar-fill');
+    const paint = ()=> fills.forEach(el=> el.style.width = (parseFloat(el.dataset.w)*100)+'%');
+    if(animate && !REDUCE){ requestAnimationFrame(()=> requestAnimationFrame(paint)); }
+    else { paint(); }
+    const sum = C.weights.reduce((a,b)=>a+b,0);
+    $('#s2sum').textContent = (sum*100).toFixed(1)+'%';
+  }
+
+  /* ---------- Stage 3: arcs ---------- */
+  function renderS3(C){
+    const svg = $('#s3');
+    const NS = 'http://www.w3.org/2000/svg';
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+    const qx=90, qy=150, tx=430;
+    const n = TOKENS.length;
+    const top = 26, bottom = 274;
+    const ys = TOKENS.map((_,i)=> top + (bottom-top)*i/(n-1));
+    const topJ = C.order[0].j;
+
+    // arcs first (behind nodes), drawn thin->thick so fat ones sit on top
+    C.order.slice().reverse().forEach(o=>{
+      const j = o.j, ty = ys[j];
+      const p = document.createElementNS(NS,'path');
+      const cx = (qx+tx)/2;
+      p.setAttribute('d', `M ${qx} ${qy} C ${cx} ${qy}, ${cx} ${ty}, ${tx} ${ty}`);
+      p.setAttribute('class','arc');
+      p.setAttribute('stroke-width', (1.5 + o.w*26).toFixed(2));
+      p.setAttribute('stroke-opacity', (0.22 + o.w*0.78).toFixed(2));
+      svg.appendChild(p);
+    });
+
+    // query node (left)
+    const qc = document.createElementNS(NS,'circle');
+    qc.setAttribute('cx',qx); qc.setAttribute('cy',qy); qc.setAttribute('r',9);
+    qc.setAttribute('class','node q'); svg.appendChild(qc);
+    const ql = document.createElementNS(NS,'text');
+    ql.setAttribute('x',qx-14); ql.setAttribute('y',qy+4); ql.setAttribute('text-anchor','end');
+    ql.setAttribute('class','nlabel q'); ql.textContent = query; svg.appendChild(ql);
+
+    // target nodes (right)
+    TOKENS.forEach((t,j)=>{
+      const ty = ys[j], isTop = j===topJ, isSelf = t===query;
+      const c = document.createElementNS(NS,'circle');
+      c.setAttribute('cx',tx); c.setAttribute('cy',ty); c.setAttribute('r',isTop?7:5);
+      c.setAttribute('class','node'+(isTop?' top':'')); svg.appendChild(c);
+      const l = document.createElementNS(NS,'text');
+      l.setAttribute('x',tx+14); l.setAttribute('y',ty+4); l.setAttribute('text-anchor','start');
+      l.setAttribute('class','nlabel'+(isTop?' top':'')); l.textContent = t + (isSelf?' (self)':''); svg.appendChild(l);
+      const pctT = document.createElementNS(NS,'text');
+      pctT.setAttribute('x',tx-14); pctT.setAttribute('y',ty+4); pctT.setAttribute('text-anchor','end');
+      pctT.setAttribute('class','npct'); pctT.textContent = pct(C.weights[j]); svg.appendChild(pctT);
+    });
+
+    const topTok = C.outward[0];
+    $('#s3cap').innerHTML = `Fattest arc → <b>${topTok.t}</b> (${pct(topTok.w)}). Thickness is the computed weight, not a stored table — every arc is drawn from the softmax output above.`;
+  }
+
+  /* ---------- Stage 4: blend V ---------- */
+  function renderS4(C){
+    // result tiles
+    const tiles = $('#s4tiles'); tiles.innerHTML='';
+    let domD = 0; C.out.forEach((v,d)=>{ if(v>C.out[domD]) domD=d; });
+    C.out.forEach((v,d)=>{
+      const el = document.createElement('div');
+      el.className = 'vtile'+(d===domD?' dom':'');
+      el.innerHTML = `<div class="vlab">${DIM_LABELS[d]}</div><div class="vnum">${f2(v)}</div>`;
+      tiles.appendChild(el);
+    });
+    // worked line for the dominant dimension (top 4 contributors, computed)
+    const contrib = TOKENS.map((t,j)=>({t, c:C.weights[j]*V[j][domD]})).sort((a,b)=>b.c-a.c);
+    const shown = contrib.slice(0,4).filter(o=>o.c>0.0005);
+    const parts = shown.map((o,k)=>{
+      const j = TOKENS.indexOf(o.t);
+      return `${trim(C.weights[j])}<span class="op">·</span>${trim(V[j][domD])}<span class="lab"> (${o.t})</span>`;
+    }).join(' + ');
+    const tail = contrib.length>shown.length ? ' + …' : '';
+    $('#s4work').innerHTML = `<span class="lab">out[${domD}] · ${DIM_LABELS[domD]}</span> = ${parts}${tail} = <b style="color:var(--cyan)">${f2(C.out[domD])}</b>`;
+
+    // human read
+    const top = C.outward[0], selfW = C.weights[C.qi];
+    $('#s4read').innerHTML =
+      `<b class="cyan">${query}</b>'s new vector is now mostly <b class="amber">${top.t}</b>-flavored `+
+      `(largest outward share, ${pct(top.w)}) — <b class="cyan">${DIM_LABELS[domD]}</b> comes out highest at ${f2(C.out[domD])}. `+
+      `It's no longer the raw embedding; it's a blend of what it attended to.`;
+
+    // self-attention + masking note
+    $('#s4self').innerHTML =
+      `<b style="color:var(--muted)">Note:</b> ${query} also keeps ${pct(selfW)} of its attention on itself — self-attention is normal, and the largest <i>outward</i> share still goes to <b style="color:var(--amber)">${top.t}</b>. `+
+      `Here every token may look at every token (bidirectional); the causal mask that stops a token seeing the future is a later topic.`;
+  }
+
+  /* ---------- reveal / lock stages ---------- */
+  function applyReveal(animateStage){
+    document.querySelectorAll('.stg').forEach(stg=>{
+      const n = +stg.dataset.stage;
+      stg.classList.toggle('locked', n>revealed);
+    });
+    // re-trigger bar animation when stage 2 becomes visible via Run/Step
+    if(animateStage===2 && revealed>=2) renderS2(current, true);
+  }
+
+  /* ---------- master render ---------- */
+  let current = null;
+  function render(animateBars){
+    current = compute();
+    renderS1(current);
+    renderS2(current, !!animateBars);
+    renderS3(current);
+    renderS4(current);
+    applyReveal();
+  }
+
+  /* ---------- controls ---------- */
+  $('#btnStep').addEventListener('click', ()=>{
+    stopRun();
+    revealed = revealed>=4 ? 1 : revealed+1;
+    applyReveal(revealed);   // animate bars if we just unlocked stage 2
+  });
+  $('#btnAll').addEventListener('click', ()=>{ stopRun(); revealed=4; applyReveal(); });
+  $('#btnRun').addEventListener('click', ()=>{
+    stopRun();
+    if(REDUCE){ revealed=4; applyReveal(); return; }
+    revealed = 0; applyReveal();
+    let step = 0;
+    const advance = ()=>{
+      step++; revealed = step; applyReveal(step);
+      if(step<4){ runTimer = setTimeout(advance, 850); } else { runTimer=null; }
+    };
+    runTimer = setTimeout(advance, 250);
+  });
+  function stopRun(){ if(runTimer){ clearTimeout(runTimer); runTimer=null; } }
+
+  /* ---------- init ---------- */
+  syncChips();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -9,6 +9,8 @@ external:
 sections:
   - title: Learn
     entries:
+      - title: 🔬 Meaning & Attention — interactive deep-dive (compute it yourself)
+        url: /tools/course/index.html
       - title: 🧠 How LLMs Work — visual course · Part 1
         url: /tools/llm-visual-course.html
       - title: ⚡ How LLMs Run Fast — inference efficiency · Part 2
