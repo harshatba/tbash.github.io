@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG: Retrieve, then Prompt — LLM Visual Course</title>
+<meta name="description" content="The weights are frozen, so knowledge is injected as retrieved context — retrieval is cosine similarity (Part 1 lesson 2), computed live over a tiny passage library and prepended to the prompt.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* control panel */
+  .ctrls{display:grid;grid-template-columns:1fr auto;gap:20px 30px;margin:2px 0 22px;align-items:end}
+  @media(max-width:620px){.ctrls{grid-template-columns:1fr;gap:16px}}
+  .ctl .clab{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--muted);margin-bottom:7px}
+  .toggle{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s;text-align:left}
+  .seg:hover{border-color:var(--line-strong);color:var(--ink)}
+  .seg.active{background:var(--cyan);color:#04201d;border-color:var(--cyan)}
+  .seg:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .seg.topn{min-width:44px;text-align:center}
+
+  /* passage library */
+  .lib{display:flex;flex-direction:column;gap:9px}
+  .lib-head{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin-bottom:2px}
+  .lib-head b{color:var(--cyan);font-weight:600}
+  .pcard{display:grid;grid-template-columns:40px 1fr 128px;gap:12px;align-items:center;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:11px 14px;transition:border-color .25s,background .25s}
+  @media(max-width:560px){.pcard{grid-template-columns:36px 1fr;gap:8px 10px}.pcard .pbarwrap{grid-column:1 / -1}}
+  .pcard.hit{border-color:rgba(67,214,200,.55);background:rgba(67,214,200,.06)}
+  .pid{font-family:var(--mono);font-size:.86rem;font-weight:600;color:var(--muted-2)}
+  .pcard.hit .pid{color:var(--cyan)}
+  .ptext{font-size:.93rem;color:var(--muted);line-height:1.4}
+  .pcard.hit .ptext{color:var(--ink)}
+  .pbarwrap{display:flex;flex-direction:column;gap:4px}
+  .pbar{position:relative;height:20px;background:rgba(11,16,32,.55);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .pbar .pfill{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,rgba(67,214,200,.2),rgba(67,214,200,.48));border-right:2px solid rgba(67,214,200,.55);border-radius:6px 0 0 6px;transition:width .4s cubic-bezier(.4,0,.2,1)}
+  .pcard.hit .pbar .pfill{background:linear-gradient(90deg,rgba(67,214,200,.42),rgba(67,214,200,.82));border-right-color:var(--cyan)}
+  @media(prefers-reduced-motion:reduce){.pbar .pfill{transition:none}}
+  .pcos{font-family:var(--mono);font-size:.78rem;color:var(--muted-2);text-align:right}
+  .pcard.hit .pcos{color:var(--cyan)}
+  .prank{display:inline-block;font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;color:#04201d;background:var(--cyan);border-radius:5px;padding:1px 6px;margin-left:7px;vertical-align:middle}
+
+  /* readout cards */
+  .reads{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0 4px}
+  @media(max-width:560px){.reads{grid-template-columns:1fr}}
+  .read{background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:14px 15px;text-align:center}
+  .read .rlab{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .read .rnum{font-family:var(--mono);font-size:1.55rem;font-weight:600;margin-top:6px;line-height:1.05;color:var(--cyan)}
+  .read .rsub{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);margin-top:5px}
+  .conf-strong{color:var(--green)!important}
+  .conf-weak{color:var(--rose)!important}
+
+  /* assembled prompt panel */
+  .promptwrap{margin-top:24px}
+  .prompt-head{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px;display:flex;align-items:center;gap:9px}
+  .prompt{font-family:var(--mono);font-size:.86rem;line-height:1.6;background:rgba(11,16,32,.55);border:1px solid var(--line);border-radius:11px;padding:16px 18px;overflow-x:auto}
+  .prompt .plabel{color:var(--violet);font-weight:600}
+  .prompt .ctx{display:block;color:var(--cyan);padding:3px 0 3px 14px;border-left:2px solid rgba(67,214,200,.5);margin:4px 0}
+  .prompt .ctx .cxid{color:var(--muted-2);margin-right:8px}
+  .prompt .qline{display:block;margin-top:12px;color:var(--ink)}
+  .prompt .qlabel{color:var(--amber);font-weight:600}
+  .prompt .arrow{color:var(--muted-2);display:block;margin-top:12px;font-size:.8rem}
+  .prompt .ans{color:var(--muted);font-style:normal}
+
+  /* live formula line */
+  .formula{font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin-top:18px;line-height:1.7;overflow-x:auto}
+  .formula .op{color:var(--cyan)}
+  .formula .lab{color:var(--muted-2)}
+  .formula b{color:var(--ink)}
+
+  /* three-way decision note */
+  .decide{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 2px}
+  @media(max-width:620px){.decide{grid-template-columns:1fr}}
+  .dcard{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:15px 16px}
+  .dcard .dh{font-family:var(--disp);font-weight:600;font-size:1rem;margin-bottom:5px}
+  .dcard .dsub{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-2);margin-bottom:9px}
+  .dcard p{font-size:.9rem;color:var(--muted);line-height:1.45;margin:0}
+  .dcard.rag{border-color:rgba(67,214,200,.45)}
+  .dcard.rag .dh{color:var(--cyan)}
+  .dcard.ft .dh{color:var(--rose)}
+  .dcard.pr .dh{color:var(--amber)}
+
+  .hood .eq{display:block;font-family:var(--mono);font-size:.86rem;color:var(--ink);background:rgba(11,16,32,.5);border:1px solid var(--line);border-radius:8px;padding:10px 13px;margin:10px 0;overflow-x:auto}
+  .hood .eq .cy{color:var(--cyan)}
+  .hood code,.hood b{white-space:normal}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part3">Part 3 · Beyond the Basics</a><span class="sep">/</span>
+    <span class="here">07 · RAG</span>
+  </nav>
+  <span class="eyebrow">Part 3 · Lesson 7/8</span>
+  <h1><span class="cyan">RAG</span>: retrieve the facts, then prompt with them</h1>
+  <p class="lede">The weights froze the day training ended, so a running model can't learn a new fact. RAG gets knowledge in the only way that's left — it <span class="strong-ink">retrieves</span> the closest passages by cosine similarity and <span class="strong-ink">prepends</span> them to the prompt. The model just reads them as context.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~6 min</b></span>
+    <span class="meta-pill">🎚 <b>cosine retrieval, live</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>After training, the weights are <span class="strong-ink">frozen</span> (Part 1: "train vs run"). A live model can't absorb a new fact on its own. There are only three ways to get knowledge in: <span class="amber">prompting</span> (paste the text yourself), <span class="rose">fine-tuning</span> (retrain the weights — permanent, costly, then frozen again), and <span class="cyan">RAG</span>.</p>
+    <p><span class="cyan">RAG</span> is automated prompting. Keep your documents as <span class="strong-ink">embedding vectors</span> in a library; at query time, embed the question and <span class="strong-ink">retrieve</span> the closest passages by <span class="cyan">cosine similarity — the exact operation of Part 1 lesson 2</span> — then prepend them to the prompt. Retrieval finds the text; prompting injects it.</p>
+    <p>So retrieval quality gates answer quality. If the top match is strong, the model answers from real text. If nothing is close, RAG injects nothing and you're back to the frozen weights guessing — the honest fix for hallucination (lesson 14).</p>
+  </div>
+
+  <div class="decide" style="margin-top:20px">
+    <div class="dcard pr"><div class="dh">Prompting</div><div class="dsub">one-off facts</div><p>You already have the text. Paste it into the context. Instant, but bounded by the window — and you must supply it every time.</p></div>
+    <div class="dcard rag"><div class="dh">RAG</div><div class="dsub">a changing knowledge base</div><p>Retrieval fetches the right passages automatically by embedding similarity, then prompts with them. Update the library, not the model.</p></div>
+    <div class="dcard ft"><div class="dh">Fine-tuning</div><div class="dsub">changing behaviour / format</div><p>Actually retrain the weights on new data. Permanent and expensive — best for teaching a <em>style</em> or skill, not fresh facts.</p></div>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Poke it · pick a query, cosine-retrieve, watch it prepend</span><button class="btn play" id="replay"><span class="ico"></span>Reset</button></div>
+
+    <div class="ctrls">
+      <div class="ctl">
+        <div class="clab">the query (embedded to a vector)</div>
+        <div class="toggle" id="qpick" role="group" aria-label="Pick a query"></div>
+      </div>
+      <div class="ctl">
+        <div class="clab">top-N to retrieve</div>
+        <div class="toggle" id="topn" role="group" aria-label="How many passages to retrieve">
+          <button class="seg topn" data-n="1">1</button>
+          <button class="seg topn active" data-n="2">2</button>
+          <button class="seg topn" data-n="3">3</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="lib-head">the passage library — <b>cos(query, passage)</b> over all 6, live</div>
+    <div class="lib" id="lib"></div>
+
+    <div class="reads">
+      <div class="read"><div class="rlab">top match</div><div class="rnum" id="rTop">P2</div><div class="rsub" id="rTopCos">cos 1.00</div></div>
+      <div class="read"><div class="rlab">passages injected</div><div class="rnum" id="rInj">2</div><div class="rsub">prepended to prompt</div></div>
+      <div class="read"><div class="rlab">retrieval confidence</div><div class="rnum" id="rConf">strong</div><div class="rsub" id="rConfSub">top cos ≥ 0.9</div></div>
+    </div>
+
+    <div class="promptwrap">
+      <div class="prompt-head">the assembled prompt · retrieved text <b style="color:var(--cyan)">prepended</b> above the question</div>
+      <div class="prompt" id="prompt"></div>
+    </div>
+
+    <div class="formula" id="formula"></div>
+
+    <p class="stage-note"><span class="key cyan">TRY →</span> Pick a different <b>query</b> and every bar re-runs <code class="inl">cos(query, passage)</code> and re-ranks — the retrieved cards and the assembled prompt rebuild. Bump <b>top-N</b> to inject more. Nothing here is stored: it's the Part 1 lesson 2 cosine looped over the library on every click.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>Retrieval is literally the cosine of Part 1 lesson 2, run over a document library. Each passage is a 4-dim vector on the axes <code>[animals, weather, cooking, space]</code>; each query is a vector too. Take "biggest planet" <code>= [0, 0.1, 0, 1]</code> against Jupiter <code>P3 = [0, 0.2, 0, 1]</code>:</p>
+      <span class="eq"><span class="cy">cos(q, P3)</span> = (0·0 + 0.1·0.2 + 0·0 + 1·1) / (√(0.1²+1²) · √(0.2²+1²))
+= 1.02 / (√1.01 · √1.04) = 1.02 / (1.005 · 1.020) = <b>0.995</b></span>
+      <p>Every other passage scores near zero for that query — the next best, storm-cloud <code>P1</code>, is only <code>0.198</code>. So retrieval cleanly returns Jupiter. The other verified queries: "cats sleep" <code>[1,0,0,0]</code> → <b>P0</b> cos <code>0.995</code> (then P4 <code>0.944</code>); "cook onions" <code>[0,0.1,1,0]</code> → <b>P2</b> cos <code>1.00</code>, then <b>P5</b> cos <code>0.989</code>.</p>
+      <p>An embedding model turns each passage into a vector <em>once</em>, offline; at query time you embed the question and rank by cosine — that's the entire retrieval step. Fine-tuning would instead bake the facts into the weights (and re-freeze them); prompting is you doing the retrieval by hand. RAG shines when the knowledge changes faster than you can retrain, and it gives the softmax real text to lean on instead of plausibility — the honest fix for the lesson-14 hallucination.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">RAG teaches the model new knowledge — the retrieved facts get learned.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The weights never change. RAG <b>retrieves</b> relevant text by embedding similarity and <b>pastes it into the prompt</b> — the model reads it as context, exactly as if you had typed it.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>Frozen weights can't learn a fact — so RAG <b>retrieves it by cosine</b> and <b>prepends it to the prompt</b>. Retrieval is Part 1's cosine; injection is prompting. The model just reads.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">In RAG, how are the right documents found?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">The model's weights are updated with them at query time.</button>
+      <button class="opt" data-correct="1">By embedding similarity — cosine between the query vector and each passage vector (Part 1 lesson 2) — then the top matches are prepended to the prompt.</button>
+      <button class="opt" data-correct="0">By keyword exact-match only.</button>
+    </div>
+    <div class="why"><b>Why:</b> retrieval ranks passages by cosine similarity in embedding space and injects the top ones as context; the frozen weights are never touched.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="reasoning.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Buying accuracy with tokens</div></a>
+  <a href="multimodal.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">An image is just more tokens</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course-data-p2.js"></script>
+<script src="course-data-p3.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* ===========================================================
+   RAG — COMPUTE, never replay.
+   Every bar is cos(query, passage) looped over RAG.passages
+   via the shared ragRetrieve()/cosine(). Changing the query or
+   top-N re-runs the cosine loop and re-ranks; the prompt panel
+   is rebuilt from the retrieved passages each time.
+   Globals: RAG, ragRetrieve (course-data-p3.js), cosine (course-data.js)
+   =========================================================== */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+
+  const qpick   = $('#qpick');
+  const topnBox = $('#topn');
+  const libEl   = $('#lib');
+  const promptEl= $('#prompt');
+  const formEl  = $('#formula');
+  const rTop=$('#rTop'), rTopCos=$('#rTopCos'), rInj=$('#rInj'),
+        rConf=$('#rConf'), rConfSub=$('#rConfSub');
+
+  let qi = 1;      // default query: "cook onions"
+  let topN = 2;
+
+  // --- build query picker chips from RAG.queries ---
+  RAG.queries.forEach((q,i)=>{
+    const b=document.createElement('button');
+    b.className='seg'+(i===qi?' active':'');
+    b.type='button'; b.dataset.qi=i; b.textContent=q.q;
+    b.addEventListener('click',()=>{ qi=i; syncPicker(); render(); });
+    qpick.appendChild(b);
+  });
+  function syncPicker(){
+    Array.from(qpick.children).forEach(c=> c.classList.toggle('active', +c.dataset.qi===qi));
+  }
+
+  topnBox.addEventListener('click', e=>{
+    const b=e.target.closest('.seg'); if(!b) return;
+    topN=+b.dataset.n;
+    topnBox.querySelectorAll('.seg').forEach(s=> s.classList.toggle('active', s===b));
+    render();
+  });
+
+  const esc = s=> s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function render(){
+    const query = RAG.queries[qi];
+
+    // --- COMPUTE live: cosine of the query vs ALL passages, then rank ---
+    const scored = RAG.passages.map(p=>({
+      id:p.id, text:p.text, cos: cosine(query.vec, p.vec)
+    }));
+    const ranked = scored.slice().sort((a,b)=> b.cos - a.cos);
+    // top-N via the shared helper (same cosine, sorted, sliced):
+    const retrieved = ragRetrieve(query.vec, topN);
+    const hitIds  = new Set(retrieved.map(r=>r.id));
+    const rankOf  = {}; ranked.forEach((r,i)=> rankOf[r.id]=i);
+
+    // --- passage cards (library order P0..P5), bar = absolute cosine 0..1 ---
+    libEl.innerHTML='';
+    scored.forEach(p=>{
+      const hit = hitIds.has(p.id);
+      const pct = Math.max(0, Math.min(1, p.cos))*100;
+      const rankBadge = hit ? '<span class="prank">#'+(rankOf[p.id]+1)+'</span>' : '';
+      const card=document.createElement('div');
+      card.className='pcard'+(hit?' hit':'');
+      card.innerHTML =
+        '<div class="pid">'+p.id+rankBadge+'</div>'+
+        '<div class="ptext">'+esc(p.text)+'</div>'+
+        '<div class="pbarwrap">'+
+          '<div class="pbar"><div class="pfill" style="width:'+pct.toFixed(1)+'%"></div></div>'+
+          '<div class="pcos">cos = '+p.cos.toFixed(3)+'</div>'+
+        '</div>';
+      libEl.appendChild(card);
+    });
+
+    // --- reads ---
+    const top = ranked[0];
+    rTop.textContent    = top.id;
+    rTopCos.textContent = 'cos '+top.cos.toFixed(2);
+    rInj.textContent    = String(topN);
+    const strong = top.cos >= 0.9;
+    rConf.textContent   = strong ? 'strong' : 'weak';
+    rConf.className     = 'rnum '+(strong?'conf-strong':'conf-weak');
+    rConfSub.textContent= strong ? 'top cos ≥ 0.9 · answer from text' : 'top cos < 0.9 · thin match';
+
+    // --- assembled prompt: retrieved text PREPENDED above the question ---
+    let ctx = retrieved.map(r=>
+      '<span class="ctx"><span class="cxid">'+r.id+'</span>'+esc(r.text)+'</span>'
+    ).join('');
+    promptEl.innerHTML =
+      '<span class="plabel">Context:</span>'+ ctx +
+      '<span class="qline"><span class="qlabel">Question:</span> '+esc(query.q)+'</span>'+
+      '<span class="arrow">→ the frozen model reads this whole block and answers '+
+      (strong?'from the retrieved text':'with a thin match — closer to guessing')+'.</span>';
+
+    // --- live formula echoing the current numbers ---
+    formEl.innerHTML =
+      '<span class="lab">retrieve</span> = top-'+topN+' <span class="op">by</span> cos(query, passage)  '+
+      '<span class="lab">// Part 1 lesson 2</span><br>'+
+      '<span class="lab">prompt</span> = <span class="op">[</span>'+
+      retrieved.map(r=>r.id).join(' + ')+' text<span class="op">]</span> + question  '+
+      '<span class="lab">→ top = <b>'+top.id+'</b> @ cos <b>'+top.cos.toFixed(3)+'</b></span>';
+  }
+
+  $('#replay').addEventListener('click', ()=>{
+    qi=1; topN=2; syncPicker();
+    topnBox.querySelectorAll('.seg').forEach(s=> s.classList.toggle('active', +s.dataset.n===2));
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
