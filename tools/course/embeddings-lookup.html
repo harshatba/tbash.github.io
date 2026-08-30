@@ -108,7 +108,7 @@
     <a href="index.html#part1">Part 1 · Meaning &amp; Attention</a><span class="sep">/</span>
     <span class="here">1 · The lookup table</span>
   </nav>
-  <span class="eyebrow">Part 1 · Lesson 1/7</span>
+  <span class="eyebrow">Part 1 · Lesson 1/15</span>
   <h1>Where does the <span class="cyan">vector</span> come from?</h1>
   <p class="lede">A token starts life as a plain integer ID. Turning it into a list of numbers isn't a calculation — it's a <span class="strong-ink">lookup</span>: go to that row of a learned table and read it off.</p>
   <div class="pill-row">
@@ -123,7 +123,7 @@
   <div class="prose">
     <p>A <span class="strong-ink">token</span> is a chunk of text the model reads as one unit, and each distinct token has a fixed integer ID — its row number. That ID carries zero meaning on its own: <code>cat</code> might be ID <code>2543</code>, but <code>2543</code> is just <em>where the row lives</em>, not what it means.</p>
     <p>So the model keeps one giant <span class="strong-ink">lookup table</span>: one row per token, and each row is a short list of numbers — the token's <span class="cyan">embedding vector</span>. "Turning a token into a vector" is literally <em>go to that row and read it off.</em> No arithmetic — just a lookup.</p>
-    <p>Those numbers were <span class="strong-ink">learned</span> during training and are now frozen; we only read them. Each <span class="cyan">dimension</span> is one slot — a learned axis of meaning. No human labels these axes, but we pretend-label ours (<span class="cyan">animacy · action · state · function</span>) so the numbers are readable. Real models use hundreds to thousands of dimensions; ours has 4.</p>
+    <p>Those numbers were <span class="strong-ink">learned</span> during training and are now frozen; we only read them. Each <span class="cyan">dimension</span> is one slot — a learned axis of meaning. No human labels these axes, but we pretend-label ours (<span class="cyan">animacy · action · state · function</span>) so the numbers are readable — these four names are <b>our invention for readability</b>, not labels the model learned; the real axes have no names. Real models use hundreds to thousands of dimensions; ours has 4.</p>
   </div>
 </section>
 

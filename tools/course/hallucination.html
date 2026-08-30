@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hallucination · Plausible ≠ True — LLM Visual Course</title>
+<meta name="description" content="Softmax ranks next-token candidates by learned plausibility with no truth-check anywhere — watch a confident, false token outrank the true answer for 'The capital of Australia is ___'.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* prompt card */
+  .prompt-card{
+    background:var(--bg-2);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin-bottom:6px;
+    font-family:var(--mono);font-size:1.05rem;color:var(--ink);
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:center;text-align:center;
+  }
+  .prompt-card .lbl{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2)}
+  .prompt-card .txt{color:var(--ink)}
+  .prompt-card .blank{
+    display:inline-block;min-width:78px;border-bottom:2px solid var(--rose);
+    color:var(--rose);font-weight:600;padding:0 6px;text-align:center;
+  }
+  .prompt-card .blank.filled{border-bottom-style:solid}
+
+  .ctl-row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:16px 0 6px}
+  .btn.rose:hover{border-color:var(--rose);color:var(--rose)}
+  .btn.rose:focus-visible{outline-color:var(--rose)}
+
+  .rank-cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--muted-2);text-align:center;margin:14px 0 16px}
+  .rank-cap b{color:var(--rose)}
+
+  /* probability bars */
+  .hbar-tbl{display:flex;flex-direction:column;gap:9px;margin-top:6px}
+  .hbar-row{
+    display:grid;grid-template-columns:20px 92px 44px 1fr 52px;gap:11px;align-items:center;
+    font-family:var(--mono);font-size:12.5px;
+  }
+  .hbar-row .hr-rank{color:var(--muted-2);font-size:11px;text-align:right}
+  .hbar-row .hr-tok{color:var(--ink)}
+  .hbar-row .hr-z{color:var(--muted-2);font-size:11px;text-align:right}
+  .hbar-row .hr-pct{color:var(--ink);font-weight:600;text-align:right}
+  .bar-track{height:18px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .bar-fill{height:100%;width:0;border-radius:5px 0 0 5px;background:linear-gradient(90deg,rgba(255,122,138,.45),var(--rose));transition:width .55s cubic-bezier(.4,0,.2,1)}
+  @media(prefers-reduced-motion:reduce){.bar-fill{transition:none}}
+
+  /* argmax "the model picks this" marker — always shown, truth-blind */
+  .hbar-row.pick .hr-tok{color:var(--rose);font-weight:600}
+  .hbar-row.pick .hr-pct{color:var(--rose)}
+  .pick-flag{
+    display:none;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--rose);border:1px solid rgba(255,122,138,.4);border-radius:5px;padding:1px 6px;margin-left:8px;white-space:nowrap;
+  }
+  .hbar-row.pick .pick-flag{display:inline-block}
+
+  /* truth tags — hidden until "mark the true answer" */
+  .truth-tag{
+    grid-column:2 / -1;justify-self:start;margin-top:1px;
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;
+    padding:2px 9px;border-radius:6px;display:none;align-items:center;gap:6px;
+  }
+  .hbar-tbl.revealed .truth-tag{display:inline-flex}
+  .truth-tag.wrong{background:rgba(255,122,138,.14);color:var(--rose);border:1px solid rgba(255,122,138,.4)}
+  .truth-tag.correct{background:rgba(110,231,135,.14);color:var(--green);border:1px solid rgba(110,231,135,.4)}
+  .truth-tag.plaus{background:var(--bg-2);color:var(--muted-2);border:1px solid var(--line)}
+  .hbar-tbl.revealed .hbar-row.true-row .bar-track{box-shadow:0 0 0 1px rgba(110,231,135,.5)}
+
+  /* no-truth callout */
+  .no-truth{
+    margin-top:20px;border:1px solid var(--line-strong);border-left:3px solid var(--rose);border-radius:10px;
+    background:linear-gradient(180deg,rgba(255,122,138,.07),var(--bg-2));padding:15px 18px;
+  }
+  .no-truth .nt-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--rose);margin-bottom:6px}
+  .no-truth p{color:var(--ink);font-size:.98rem;line-height:1.55}
+  .no-truth .formula{font-family:var(--mono);font-size:.86rem;color:var(--muted);margin-top:10px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:9px 12px;overflow-x:auto}
+  .no-truth .formula .op{color:var(--rose)}
+  .no-truth .formula .strike{color:var(--muted-2);text-decoration:line-through}
+
+  .sumline{margin-top:14px;font-family:var(--mono);font-size:12px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+  .sumline b{color:var(--green)}
+
+  @media(max-width:600px){
+    .hbar-row{grid-template-columns:18px 78px 1fr 46px;grid-template-areas:"rank tok bar pct" "z z z z"}
+    .hbar-row .hr-rank{grid-area:rank}.hbar-row .hr-tok{grid-area:tok}
+    .hbar-row .bar-track{grid-area:bar}.hbar-row .hr-pct{grid-area:pct}
+    .hbar-row .hr-z{grid-area:z;text-align:left;font-size:10.5px}
+    .pick-flag{margin-left:6px}
+  }
+
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500;text-align:right}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--amber)}
+  .hood table tr.true-hi td{color:var(--green)}
+  .hood table tr.true-hi td:first-child{color:var(--green)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">14 · Why models hallucinate</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 14/15</span>
+  <h1>Why models <span class="rose">hallucinate</span></h1>
+  <p class="lede">Every step so far ranks next-token candidates by learned <strong class="strong-ink">plausibility</strong> — how well a continuation fits the training patterns. Nowhere in the arithmetic is there a step that asks <em>"is this actually true?"</em> So a confident, plausible, <strong class="strong-ink">false</strong> token can outrank the correct one.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~4 min</b></span>
+    <span class="meta-pill">🎚 <b>softmax, computed live</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Lessons 10 and 11 turned a final vector into <span class="green">vocab-logits</span> and then, through <b class="strong-ink">softmax</b>, into next-token probabilities. That whole pipeline ranks tokens by one thing only: how <b class="strong-ink">plausible</b> each continuation is, given the patterns the model saw in training.</p>
+    <p>So when a false answer is more <b class="strong-ink">famous</b> or more <b class="strong-ink">frequent</b> than the true one, it can carry the higher logit — and win. That's hallucination, mechanically: not the model "lying," just plausibility beating truth, because <span class="rose">truth was never a term in the computation.</span></p>
+    <p>Below is a toy distribution for <span class="mono">"The capital of Australia is ___"</span>. <b class="strong-ink">Canberra</b> is the real capital; <b class="strong-ink">Sydney</b> is the larger, more-talked-about city — the common wrong guess. Watch which one softmax picks.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Ranked by plausibility · no truth-check anywhere</span></div>
+
+    <div class="prompt-card">
+      <span class="lbl">prompt</span>
+      <span class="txt">The capital of Australia is <span class="blank" id="blank">___</span></span>
+    </div>
+
+    <div class="ctl-row">
+      <button class="btn rose play" id="btnRecompute"><span class="ico"></span>Recompute softmax</button>
+      <button class="btn" id="btnTruth">Mark the true answer</button>
+    </div>
+
+    <p class="rank-cap">the model's ranking — <b>argmax</b> is whatever has the highest probability, full stop</p>
+
+    <div class="hbar-tbl" id="bars"><!-- bars injected --></div>
+
+    <div class="sumline"><span>Σ of all probabilities</span><span>Σ = <b id="sum">100.0%</b></span></div>
+
+    <div class="no-truth">
+      <div class="nt-k">the point</div>
+      <p id="ntText">Hit <b>Mark the true answer</b>. The model's pick doesn't move — because <b>no "is this true?" step exists anywhere in this computation.</b> Only <em>you</em>, from outside, can flag which bar is correct.</p>
+      <div class="formula">pick <span class="op">=</span> argmax&nbsp;softmax(logits)&nbsp;&nbsp;&nbsp;<span class="strike">+ is_true(token)</span><span style="color:var(--muted-2)"> ← no such term</span></div>
+    </div>
+
+    <p class="stage-note"><span class="key rose">TRY →</span> Hit <b>Recompute softmax</b> and the five bars are rebuilt from the raw logits every time (never replayed from a stored answer) — the winner is <b>Sydney</b> at ~50%. Then hit <b>Mark the true answer</b>: <b>Canberra</b> lights up green at rank&nbsp;3, and the confident, wrong <b>Sydney</b> is flagged red. The ranking never changes — truth was never part of it.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>Five candidate logits for <code>"The capital of Australia is ___"</code>, run through the same <code>softmax(z) = e^z / Σe^z</code> from every other page. Subtracting the max (<code>3.0</code>) for numerical stability, the denominator is <code>Σ e^(z−3.0) = 1.997</code>:</p>
+      <div class="wrapx"><table>
+        <tr><th>token</th><th>logit z</th><th>e^(z−3.0)</th><th>probability</th></tr>
+        <tr><td>Sydney</td><td>3.0</td><td>1.000</td><td>50.1%</td></tr>
+        <tr><td>Melbourne</td><td>2.2</td><td>0.449</td><td>22.5%</td></tr>
+        <tr class="true-hi"><td>Canberra (true)</td><td>1.8</td><td>0.301</td><td>15.1%</td></tr>
+        <tr><td>Perth</td><td>1.0</td><td>0.135</td><td>6.8%</td></tr>
+        <tr><td>Brisbane</td><td>0.8</td><td>0.111</td><td>5.5%</td></tr>
+      </table></div>
+      <p>The false-but-famous <code>Sydney</code> (50.1%) beats the true <code>Canberra</code> (15.1%, rank 3). Canberra <b>is</b> Australia's capital; Sydney is its largest, most-talked-about city, so training made <code>Sydney</code> the stronger association here. The softmax ranks by that association — <b>it has no fact table to consult.</b></p>
+      <p>Turning up temperature (lesson 11) doesn't fix this — it only changes <i>how often</i> the wrong-but-confident token is sampled; <code>Sydney</code> is still the argmax. (The logits here are <b>illustrative</b>; the mechanism — plausibility with no truth signal — is the real point.)</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">A hallucination is a bug — the model "knows" the truth and glitched, or the temperature was just set too high.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">There's no truth signal in the computation at all. The model ranks by plausibility; when a false token is more plausible than the true one, it wins. It's the <b>same mechanism</b> that produces a correct answer — just pointed at a case where fame outweighs fact.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>Prediction picks the <b>most plausible</b> continuation, never the <b>verified-true</b> one — because nothing in the softmax computes truth. A confident, fluent, false token can outrank the correct answer.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Mechanically, why can a model state a confident falsehood?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">A corrupted weight flipped the true answer to a false one.</button>
+      <button class="opt" data-correct="1">Prediction ranks tokens by learned plausibility with no truth-check, so a plausible false token can outrank the true one.</button>
+      <button class="opt" data-correct="0">The temperature was set too high, adding random noise.</button>
+    </div>
+    <div class="why"><b>Why:</b> nothing in the softmax computes truth — only plausibility — so fame or frequency can beat correctness. Same arithmetic as a right answer; truth was simply never a term in it.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="positional-encoding.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Meaning + position, added</div></a>
+  <a href="tokenization-edges.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Why it can't count the r's in "strawberry"</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Hallucination — the ranking is COMPUTED live from HALLUCINATE.logits.
+   softmax(z) is recomputed on every "Recompute" press; the truth flags are
+   display-only and add NO boost to the math. Recompute, never replay.
+   Globals from course-data.js: HALLUCINATE {prompt, logits:[{tok,z,truth}]}, softmax.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+  const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pct = (n)=> (n*100).toFixed(1)+'%';
+
+  const barsBox = $('#bars');
+  let truthShown = false;
+
+  // Compute the distribution live: softmax over the RAW logits only.
+  // truth:true is carried for DISPLAY, never fed into the math.
+  function computeDist(){
+    const zs = HALLUCINATE.logits.map(o=>o.z);      // <-- the only input to softmax
+    const ps = softmax(zs);                          // recompute, not replay
+    return HALLUCINATE.logits
+      .map((o,i)=>({ tok:o.tok, z:o.z, truth:o.truth, p:ps[i] }))
+      .sort((a,b)=> b.p - a.p);                       // rank by probability (plausibility) alone
+  }
+
+  function render(animate){
+    const dist = computeDist();
+    const maxP = Math.max(...dist.map(d=>d.p));
+    const pickIdx = 0;                                // argmax = top after sort (truth-blind)
+    barsBox.innerHTML = '';
+    barsBox.classList.toggle('revealed', truthShown);
+
+    dist.forEach((d, rank)=>{
+      const isPick = rank === pickIdx;
+      const row = document.createElement('div');
+      row.className = 'hbar-row' + (isPick?' pick':'') + (d.truth?' true-row':'');
+
+      // truth tag: green on the true answer; red on the argmax if it is false;
+      // faded "plausible, false" on the remaining wrong candidates.
+      let tag = '';
+      if(d.truth){
+        tag = `<span class="truth-tag correct">✓ actually correct — the real capital</span>`;
+      } else if(isPick){
+        tag = `<span class="truth-tag wrong">✕ confident — and wrong</span>`;
+      } else {
+        tag = `<span class="truth-tag plaus">plausible, but false</span>`;
+      }
+
+      row.innerHTML =
+        `<span class="hr-rank">${rank+1}</span>`+
+        `<span class="hr-tok">${d.tok}<span class="pick-flag">model picks this</span></span>`+
+        `<span class="hr-z">z ${d.z.toFixed(1)}</span>`+
+        `<div class="bar-track"><div class="bar-fill" data-w="${d.p/maxP}"></div></div>`+
+        `<span class="hr-pct">${pct(d.p)}</span>`+
+        tag;
+      barsBox.appendChild(row);
+    });
+
+    // paint bar widths (relative to the winner so it spans the track)
+    const fills = barsBox.querySelectorAll('.bar-fill');
+    const paint = ()=> fills.forEach(el=> el.style.width = (parseFloat(el.dataset.w)*100)+'%');
+    if(animate && !REDUCE){ fills.forEach(el=>el.style.width='0'); requestAnimationFrame(()=>requestAnimationFrame(paint)); }
+    else { paint(); }
+
+    const sum = dist.reduce((a,b)=>a+b.p,0);
+    $('#sum').textContent = (sum*100).toFixed(1)+'%';
+  }
+
+  function showTruth(){
+    truthShown = true;
+    barsBox.classList.add('revealed');
+    const blank = $('#blank');
+    blank.textContent = 'Canberra';
+    blank.classList.add('filled');
+    $('#ntText').innerHTML =
+      `The model's pick is still <b>Sydney</b> (~50%) — flagging the truth changed <b>nothing</b> in the ranking, `+
+      `because <b>no "is this true?" step exists anywhere in this computation.</b> `+
+      `The true answer, <b style="color:var(--green)">Canberra</b>, sits at rank&nbsp;3.`;
+    $('#btnTruth').textContent = 'Truth marked ✓';
+    $('#btnTruth').disabled = true;
+  }
+
+  $('#btnRecompute').addEventListener('click', ()=> render(true));
+  $('#btnTruth').addEventListener('click', showTruth);
+
+  // initial paint
+  render(true);
+})();
+</script>
+</body>
+</html>

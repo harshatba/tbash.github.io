@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sampling · Temperature, top-k, top-p — LLM Visual Course</title>
+<meta name="description" content="Three dials reshape the same next-word distribution: temperature sharpens or flattens it, top-k caps the count of candidates, top-p caps the probability mass. The logits never change.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* control panel */
+  .dials{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:6px}
+  @media(max-width:640px){.dials{grid-template-columns:1fr}}
+  .dial{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .dial .d-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+  .dial .d-name{font-family:var(--mono);font-size:12px;letter-spacing:.05em;color:var(--ink)}
+  .dial .d-val{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--green)}
+  .dial .d-val.off{color:var(--muted-2)}
+  .dial .d-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;color:var(--muted-2);line-height:1.5;margin-top:6px}
+  .dial input[type=range]{accent-color:var(--green)}
+  .reset-row{display:flex;justify-content:center;margin:6px 0 20px}
+
+  /* eligible-set caption */
+  .elig{font-family:var(--mono);font-size:12.5px;color:var(--muted);text-align:center;margin:2px 0 20px;line-height:1.6}
+  .elig b{color:var(--green)}
+  .elig .none{color:var(--muted-2)}
+
+  /* probability bars */
+  .prob-tbl{display:flex;flex-direction:column;gap:8px}
+  .prob-row{display:grid;grid-template-columns:74px 46px 1fr 58px;gap:10px;align-items:center;font-family:var(--mono);font-size:12.5px;transition:opacity .35s ease}
+  .prob-row .pr-tok{color:var(--amber)}
+  .prob-row .pr-z{color:var(--muted-2);font-size:11px;text-align:right}
+  .prob-row .pr-pct{color:var(--ink);font-weight:600;text-align:right}
+  .prob-track{height:18px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .prob-fill{height:100%;width:0;background:linear-gradient(90deg,rgba(110,231,135,.5),var(--green));border-radius:5px 0 0 5px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+  .prob-row.lead .pr-tok,.prob-row.lead .pr-pct{color:var(--green)}
+  .prob-row.cut{opacity:.32}
+  .prob-row.cut .pr-tok{color:var(--muted-2)}
+  .prob-row.cut .pr-pct{color:var(--muted-2)}
+  .prob-row.cut .prob-fill{background:var(--line-strong)}
+  @media(prefers-reduced-motion:reduce){.prob-fill{transition:none}.prob-row{transition:none}}
+  @media(max-width:640px){
+    .prob-row{grid-template-columns:64px 1fr 50px}
+    .prob-row .pr-z{display:none}
+  }
+
+  .prob-sum{margin-top:16px;font-family:var(--mono);font-size:12.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+  .prob-sum b{color:var(--green)}
+
+  .formula{font-family:var(--mono);font-size:12px;color:var(--muted-2);text-align:center;margin:4px 0 18px;line-height:1.7}
+  .formula code{background:rgba(110,231,135,.1);color:var(--green)}
+
+  /* hood table */
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--amber)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">11 · Sampling — temperature, top-k, top-p</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 11/15</span>
+  <h1>Three dials on the <span class="green">next-word</span> distribution</h1>
+  <p class="lede">Softmax hands you one honest distribution over the next word. Before picking, you can <b class="strong-ink">reshape</b> it with three dials — temperature, top-k, and top-p — without ever touching the logits underneath. Every bar below is recomputed live from the same eight scores.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>three live dials</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Last page turned the final vector into <span class="green">vocab-logits</span> and softmaxed them into probabilities. That's one fixed distribution — but it's not the end of the story. Between "here are the probabilities" and "here's the word," there's a reshaping step, and it's where <span class="strong-ink">creativity versus focus</span> gets dialed.</p>
+    <p><span class="strong-ink">Temperature</span> divides every logit by <code class="inl">T</code> before softmax: below 1 sharpens toward the leader (safer, more deterministic), above 1 flattens toward the field (riskier, more surprising). <span class="strong-ink">Top-k</span> keeps only the <code class="inl">k</code> best candidates and zeroes the rest. <span class="strong-ink">Top-p</span> keeps the smallest set whose probabilities add up to at least <code class="inl">p</code>.</p>
+    <p>The division of labor: top-k and top-p decide <b class="strong-ink">which tokens are eligible</b>; temperature decides <b class="strong-ink">how peaky</b> the choice among them is. Same softmax underneath — the model's scores never move.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Reshape the distribution · computed live</span></div>
+
+    <div class="picker-cap" style="font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--muted-2);text-align:center;margin:0 0 18px">
+      candidates for <b style="color:var(--amber)">&ldquo;&hellip;it was <span style="color:var(--green)">___</span>&rdquo;</b> — eight next-token scores, reshaped by the dials below
+    </div>
+
+    <div class="dials">
+      <div class="dial">
+        <div class="d-top"><span class="d-name">temperature T</span><span class="d-val" id="tVal">1.0</span></div>
+        <input type="range" id="tRange" min="0.1" max="2.0" step="0.1" value="1.0" aria-label="temperature">
+        <div class="d-sub">z′ = z / T · &lt;1 sharpens, &gt;1 flattens</div>
+      </div>
+      <div class="dial">
+        <div class="d-top"><span class="d-name">top-k</span><span class="d-val off" id="kVal">8 · off</span></div>
+        <input type="range" id="kRange" min="1" max="8" step="1" value="8" aria-label="top-k">
+        <div class="d-sub">keep the k highest, zero the rest</div>
+      </div>
+      <div class="dial">
+        <div class="d-top"><span class="d-name">top-p</span><span class="d-val off" id="pVal">1.00 · off</span></div>
+        <input type="range" id="pRange" min="0.1" max="1.0" step="0.05" value="1.0" aria-label="top-p">
+        <div class="d-sub">keep smallest nucleus with Σ ≥ p</div>
+      </div>
+    </div>
+    <div class="reset-row"><button class="btn" id="btnReset">Reset all dials</button></div>
+
+    <div class="formula">
+      <code class="inl">p = softmax(logits / T)</code> &nbsp;→&nbsp; keep <b>top-k</b> or the <b>top-p</b> nucleus &nbsp;→&nbsp; <b>renormalize survivors</b>
+    </div>
+
+    <div class="elig" id="elig"></div>
+
+    <div class="prob-tbl" id="bars"></div>
+
+    <div class="prob-sum">
+      <span id="sumLabel">eligible tokens, renormalized</span>
+      <span>Σ eligible = <b id="sumVal">100.0%</b></span>
+    </div>
+
+    <p class="stage-note"><span class="key green">TRY →</span> Pull <b>temperature</b> to <b>0.5</b> and watch <b>tired</b> shoot toward 79%; push it to <b>2.0</b> and the field flattens. Set <b>top-k = 3</b> — five bars go dark and the survivors regrow. Now set <b>top-p = 0.9</b> instead: it keeps <b>four</b> tokens, not three, because it counts probability mass, not candidates.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>The eight raw logits (fixed): <code>tired 3.2 · sleepy 2.4 · hungry 1.6 · resting 1.1 · scared 0.7 · purring 0.3 · gone -0.2 · blue -1.0</code>. At <code>T = 1</code>, softmax gives:</p>
+      <div class="wrapx"><table>
+        <tr><th>token</th><th>logit z</th><th>p (T=1)</th><th>cumulative</th></tr>
+        <tr><td>tired</td><td>3.2</td><td>51.0%</td><td>0.510</td></tr>
+        <tr><td>sleepy</td><td>2.4</td><td>22.9%</td><td>0.740</td></tr>
+        <tr><td>hungry</td><td>1.6</td><td>10.3%</td><td>0.843</td></tr>
+        <tr><td>resting</td><td>1.1</td><td>6.3%</td><td>0.906</td></tr>
+        <tr><td>scared</td><td>0.7</td><td>4.2%</td><td>0.947</td></tr>
+        <tr><td>purring</td><td>0.3</td><td>2.8%</td><td>0.975</td></tr>
+        <tr><td>gone</td><td>-0.2</td><td>1.7%</td><td>0.992</td></tr>
+        <tr><td>blue</td><td>-1.0</td><td>0.8%</td><td>1.000</td></tr>
+      </table></div>
+      <p><b style="color:var(--green)">top-k = 3</b> keeps <code>{tired, sleepy, hungry}</code> and renormalizes them to <code>60.6% / 27.2% / 12.2%</code> — a hard cap on the <i>count</i> of survivors, always exactly three.</p>
+      <p><b style="color:var(--green)">top-p = 0.9</b> walks the cumulative column: <code>0.510 → 0.740 → 0.843 → 0.906</code>. It stops the moment the running sum crosses 0.9 — which happens <i>after</i> adding <code>resting</code>. So it keeps <code>{tired, sleepy, hungry, <b>resting</b>}</code> — <b>one more token than k=3</b>. That extra token is the whole point: top-p caps <i>probability mass</i>, so the number of candidates floats with how confident the model is. Here the model isn't confident enough for three tokens to cover 90%, so a fourth is pulled in.</p>
+      <p><b>Temperature</b> reshapes without cutting: <code>T = 0.5</code> sharpens <code>tired</code> to <code>~79%</code>; <code>T = 2</code> flattens it to <code>~30%</code>. Every one of these — temperature, top-k, top-p — changes the <i>distribution</i> you sample from. None of them changes the <i>logits</i>. The model's scores are fixed the instant the forward pass ends; the dials only reshape how you draw a word from them. (Illustrative candidates — the mechanism is the real thing.)</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Temperature makes the model smarter or dumber — it changes what the model knows.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The logits are fixed. Temperature, top-k, and top-p only <b style="color:var(--ink)">reshape the distribution</b> you sample from — more peaky and safe, or flatter and more surprising. The model's knowledge is untouched; you're only changing how you draw from it.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>Three dials, one distribution: <b>temperature</b> sets how peaky, <b>top-k</b> caps the candidate count, <b>top-p</b> caps the probability mass. The logits never move — you only reshape how you sample from them.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">You set <code class="inl">top-p = 0.9</code>. What does that do?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">Keeps exactly 9 tokens.</button>
+      <button class="opt" data-correct="1">Keeps the smallest set of top tokens whose probabilities add up to at least 0.9, then renormalizes.</button>
+      <button class="opt" data-correct="0">Divides every logit by 0.9 before softmax.</button>
+    </div>
+    <div class="why"><b>Why:</b> top-p (nucleus) caps <i>probability mass</i>, so the number of eligible tokens floats with the model's confidence — unlike top-k, which caps the <i>count</i>. Here 0.9 pulls in four tokens because three only reach 0.843.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="unembedding.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">From vector to a next-word guess</div></a>
+  <a href="transformer-block.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">One block, stacked N times</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Sampling — temperature / top-k / top-p, COMPUTED live from NEXT_LOGITS.
+   No stored answers: every dial move re-runs the whole pipeline.
+   Pipeline order:  z' = z/T  ->  softmax  ->  top-k cut  ->  top-p cut  ->  renormalize.
+   Globals from course-data.js: NEXT_LOGITS [8 {tok,z}], softmax.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+  const N = NEXT_LOGITS.length;
+  const pct1 = (x)=> (x*100).toFixed(1)+'%';
+
+  // dial state
+  const state = { T:1.0, k:8, p:1.0 };
+
+  /* ---------- the pipeline: recompute, never replay ---------- */
+  function pipeline(){
+    // (1) temperature, (2) softmax
+    const probs = softmax(NEXT_LOGITS.map(o=> o.z / state.T));
+    // keep-mask, all in by default
+    let keep = probs.map(()=> true);
+    // (3) top-k: keep the k highest-probability tokens
+    if(state.k < N){
+      const kept = new Set(
+        probs.map((pr,i)=>({pr,i})).sort((a,b)=> b.pr-a.pr).slice(0,state.k).map(o=>o.i)
+      );
+      keep = keep.map((v,i)=> v && kept.has(i));
+    }
+    // (4) top-p: smallest nucleus whose cumulative probability reaches p
+    if(state.p < 1){
+      const order = probs.map((pr,i)=>({pr,i})).sort((a,b)=> b.pr-a.pr);
+      const kept = new Set(); let cum = 0;
+      for(const o of order){ kept.add(o.i); cum += o.pr; if(cum >= state.p) break; }
+      keep = keep.map((v,i)=> v && kept.has(i));
+    }
+    // (5) renormalize the survivors to sum to 1
+    const masked = probs.map((pr,i)=> keep[i] ? pr : 0);
+    const s = masked.reduce((a,b)=>a+b,0) || 1;
+    const final = masked.map(x=> x/s);
+    return { probs, keep, final };
+  }
+
+  /* ---------- render ---------- */
+  const bars = $('#bars');
+  // build rows once, in the fixed logit order
+  NEXT_LOGITS.forEach((o,i)=>{
+    const row = document.createElement('div');
+    row.className = 'prob-row';
+    row.dataset.i = i;
+    row.innerHTML =
+      `<span class="pr-tok">${o.tok}</span>`+
+      `<span class="pr-z">z ${o.z.toFixed(1)}</span>`+
+      `<div class="prob-track"><div class="prob-fill"></div></div>`+
+      `<span class="pr-pct">0%</span>`;
+    bars.appendChild(row);
+  });
+  const rows = Array.from(bars.children);
+
+  function render(){
+    const C = pipeline();
+    const maxFinal = Math.max(...C.final) || 1;
+    // leader = highest surviving probability
+    let leadI = -1, leadV = -1;
+    C.final.forEach((v,i)=>{ if(C.keep[i] && v>leadV){ leadV=v; leadI=i; } });
+
+    rows.forEach((row,i)=>{
+      const cut = !C.keep[i];
+      row.classList.toggle('cut', cut);
+      row.classList.toggle('lead', i===leadI);
+      const fill = row.querySelector('.prob-fill');
+      // bar width relative to the biggest surviving prob, so the leader spans the track
+      fill.style.width = (cut ? 0 : (C.final[i]/maxFinal)*100) + '%';
+      row.querySelector('.pr-pct').textContent = cut ? '0%' : pct1(C.final[i]);
+    });
+
+    // eligible-set caption
+    const eligible = NEXT_LOGITS.filter((o,i)=> C.keep[i]).map(o=>o.tok);
+    const cutByK = state.k < N, cutByP = state.p < 1;
+    let cause = '';
+    if(cutByK && cutByP) cause = `top-k = ${state.k} and top-p = ${state.p.toFixed(2)}`;
+    else if(cutByK) cause = `top-k = ${state.k}`;
+    else if(cutByP) cause = `top-p = ${state.p.toFixed(2)}`;
+    const eligEl = $('#elig');
+    if(!cutByK && !cutByP){
+      eligEl.innerHTML = `all <b>8</b> tokens eligible — top-k and top-p are off; temperature only reshapes the peak`;
+    } else {
+      eligEl.innerHTML = `${cause} → <b>${eligible.join(', ')}</b> eligible `+
+        `<span class="none">(${eligible.length} of 8)</span>`;
+    }
+
+    // running sum of the eligible, renormalized distribution
+    const sum = C.final.reduce((a,b)=>a+b,0);
+    $('#sumVal').textContent = pct1(sum);
+  }
+
+  /* ---------- dial wiring ---------- */
+  const tR = $('#tRange'), kR = $('#kRange'), pR = $('#pRange');
+  const tV = $('#tVal'),   kV = $('#kVal'),   pV = $('#pVal');
+
+  function syncLabels(){
+    tV.textContent = state.T.toFixed(1);
+    kV.textContent = state.k >= N ? `${state.k} · off` : `${state.k}`;
+    kV.classList.toggle('off', state.k >= N);
+    pV.textContent = state.p >= 1 ? `${state.p.toFixed(2)} · off` : state.p.toFixed(2);
+    pV.classList.toggle('off', state.p >= 1);
+  }
+
+  tR.addEventListener('input', ()=>{ state.T = parseFloat(tR.value); syncLabels(); render(); });
+  kR.addEventListener('input', ()=>{ state.k = parseInt(kR.value,10); syncLabels(); render(); });
+  pR.addEventListener('input', ()=>{ state.p = parseFloat(pR.value); syncLabels(); render(); });
+
+  $('#btnReset').addEventListener('click', ()=>{
+    state.T = 1.0; state.k = 8; state.p = 1.0;
+    tR.value = '1.0'; kR.value = '8'; pR.value = '1.0';
+    syncLabels(); render();
+  });
+
+  /* ---------- init ---------- */
+  syncLabels();
+  render();
+})();
+</script>
+</body>
+</html>

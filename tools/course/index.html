@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>How LLMs Work — Meaning &amp; Attention</title>
-<meta name="description" content="An interactive 7-lesson track on where a token's meaning-vector comes from and how attention actually computes — every number computed live, no analogies.">
+<meta name="description" content="An interactive 15-lesson track: where a token's meaning-vector comes from, how attention computes, and how the vector becomes the next word — every number computed live, no analogies.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29,6 +29,8 @@
   .lc-dot.cyan{background:var(--cyan)}
   .lc-dot.violet{background:var(--violet)}
   .lc-dot.rose{background:var(--rose)}
+  .lc-dot.green{background:var(--green)}
+  .act-divider{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);margin:14px 2px 2px;padding-top:12px;border-top:1px dashed var(--line)}
   .lc-body{min-width:0}
   .lc-ttl{font-family:var(--disp);font-weight:600;font-size:1.08rem;color:var(--ink);line-height:1.25}
   .lc-blurb{color:var(--muted);font-size:.9rem;margin-top:4px}
@@ -44,6 +46,7 @@
   .legend .d.cyan{background:var(--cyan)}
   .legend .d.violet{background:var(--violet)}
   .legend .d.rose{background:var(--rose)}
+  .legend .d.green{background:var(--green)}
 
   /* classic-walkthrough block */
   .overview-links{display:flex;flex-direction:column;gap:12px;margin-top:14px}
@@ -84,9 +87,9 @@
 <header class="lesson-head wrap reveal">
   <span class="eyebrow">Interactive deep-dive · Part 1</span>
   <h1>How LLMs Work — <span class="cyan">Meaning</span> &amp; <span class="violet">Attention</span></h1>
-  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Seven short pages, one idea and one live widget each; every number on screen is computed in front of you.</p>
+  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Fifteen short pages, one idea and one live widget each — from tokens through attention to the next-word prediction — and every number on screen is computed in front of you.</p>
   <div class="pill-row">
-    <span class="meta-pill">📚 <b>7 lessons</b></span>
+    <span class="meta-pill">📚 <b>15 lessons</b></span>
     <span class="meta-pill">🎚 <b>interactive</b></span>
     <span class="meta-pill">math: <b>traceable</b></span>
   </div>
@@ -99,10 +102,11 @@
     <span class="li"><span class="d cyan"></span> vectors / embeddings</span>
     <span class="li"><span class="d violet"></span> attention</span>
     <span class="li"><span class="d rose"></span> weights</span>
+    <span class="li"><span class="d green"></span> probabilities</span>
   </div>
 </section>
 
-<!-- ============ THE 7 LESSONS ============ -->
+<!-- ============ THE 15 LESSONS ============ -->
 <section class="block wrap reveal" style="padding-top:10px">
   <ol class="lesson-list">
     <li>
@@ -178,6 +182,95 @@
         <span class="lc-body">
           <span class="lc-ttl">Many heads, many kinds of attention</span>
           <span class="lc-blurb">Toggle heads and watch the same token get routed three different ways.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li aria-hidden="true"><p class="act-divider">Act 2 · from attention to a word — the forward pass</p></li>
+    <li>
+      <a class="lesson-card" href="residual-stream.html">
+        <span class="lc-num">08</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Where does the blended vector go?</span>
+          <span class="lc-blurb">Add attention's blend <em>back onto</em> the token's own vector — refine, don't replace.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="feed-forward.html">
+        <span class="lc-num">09</span>
+        <span class="lc-dot rose" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">The feed-forward step: each token thinks alone</span>
+          <span class="lc-blurb">Run the lesson-4 neuron across a real post-attention token vector.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="unembedding.html">
+        <span class="lc-num">10</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">From vector to a next-word guess</span>
+          <span class="lc-blurb">Dot the final vector against every embedding row to rank the next word.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="sampling.html">
+        <span class="lc-num">11</span>
+        <span class="lc-dot green" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Three dials on the next-word distribution</span>
+          <span class="lc-blurb">Reshape the probabilities with temperature, top-k, and top-p.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="transformer-block.html">
+        <span class="lc-num">12</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">One block, stacked N times</span>
+          <span class="lc-blurb">Stack attention + FFN + residual and watch a token's vector drift over layers.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="positional-encoding.html">
+        <span class="lc-num">13</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Meaning + position, literally added</span>
+          <span class="lc-blurb">Add position to meaning, element-wise: "dog bites man" vs "man bites dog".</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="hallucination.html">
+        <span class="lc-num">14</span>
+        <span class="lc-dot rose" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Why models hallucinate</span>
+          <span class="lc-blurb">See a confident, false token outrank the true one — no truth-check anywhere.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="tokenization-edges.html">
+        <span class="lc-num">15</span>
+        <span class="lc-dot amber" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Why it can't count the r's in "strawberry"</span>
+          <span class="lc-blurb">Watch "strawberry" become opaque IDs the letter-count can't survive.</span>
         </span>
         <span class="lc-arrow" aria-hidden="true">→</span>
       </a>

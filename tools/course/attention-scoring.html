@@ -112,7 +112,7 @@
     <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
     <span class="here">6 · Attention II — how attention computes</span>
   </nav>
-  <span class="eyebrow">Part 1 · Lesson 6/7</span>
+  <span class="eyebrow">Part 1 · Lesson 6/15</span>
   <h1>How <span class="violet">attention</span> actually computes</h1>
   <p class="lede">Click a query token and watch the whole pipeline run on real numbers: dot products become raw scores, softmax turns them into weights that sum to 1, and the Values blend into a brand-new vector. Nothing here is looked up — every number falls out of arithmetic you can trace.</p>
   <div class="pill-row">
@@ -126,8 +126,8 @@
 <section class="block wrap reveal">
   <div class="prose">
     <p>Last page we built three vectors from every token's embedding: a <span class="violet">Query</span> (what it's looking for), a <span class="violet">Key</span> (what it advertises), and a <span class="violet">Value</span> (the content it hands over). Now they get used.</p>
-    <p>To decide how much token <b class="strong-ink">A</b> should listen to token <b class="strong-ink">B</b>, take A's Query and B's Key and <b class="strong-ink">dot them together</b>: <code class="inl">q·k</code>. A bigger dot product means the two vectors point the same way — a better match, a higher raw score. Those raw scores are the <span class="violet">logits</span> of the attention softmax.</p>
-    <p>Run all the scores through <b class="strong-ink">softmax</b> and you get positive fractions that add up to 1 — the <span class="violet">attention weights</span>. This is the exact same softmax that turns next-token logits into probabilities in the classic temperature widget. Finally, A's new vector is the <b class="strong-ink">weighted blend of every token's Value</b>: a token literally becomes a mix of what it paid attention to.</p>
+    <p>To decide how much token <b class="strong-ink">A</b> should listen to token <b class="strong-ink">B</b>, take A's Query and B's Key and <b class="strong-ink">dot them together</b>: <code class="inl">q·k</code>. A bigger dot product means the two vectors point the same way — a better match, a higher raw score. Those raw scores are the <span class="violet">logits</span> of the attention softmax. (These are <b>attention-logits</b> — one score per token in the sentence. Later, next-token prediction produces <b>vocab-logits</b> — one score per word in the whole vocabulary. Same softmax, different lists; <a href="unembedding.html">lesson 10</a> builds the second.)</p>
+    <p>Run all the scores through <b class="strong-ink">softmax</b> and you get positive fractions that add up to 1 — the <span class="violet">attention weights</span>. This is the exact same softmax that turns next-token logits into probabilities — the one you'll dial with temperature on <a href="sampling.html">lesson 11</a>. Finally, A's new vector is the <b class="strong-ink">weighted blend of every token's Value</b>: a token literally becomes a mix of what it paid attention to.</p>
   </div>
 </section>
 
@@ -157,7 +157,7 @@
       <div class="stg-b">
         <div class="wt-tbl" id="s2"></div>
         <div class="wt-sum"><span>running sum of all weights</span><span>Σ = <b id="s2sum">100.0%</b></span></div>
-        <div class="softmax-note"><b>Same operation as next-token probability.</b> These are the identical <code class="inl" style="font-size:.82em">e^z / Σe^z</code> fractions the temperature widget uses — here they weight attention instead of picking a word.</div>
+        <div class="softmax-note"><b>Same operation as next-token probability.</b> These are the identical <code class="inl" style="font-size:.82em">e^z / Σe^z</code> fractions the sampling page (lesson 11) reshapes with temperature — here they weight attention instead of picking a word.</div>
       </div>
     </div>
 

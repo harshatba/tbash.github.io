@@ -101,7 +101,7 @@
     <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
     <span class="here">07 · Attention III: many heads</span>
   </nav>
-  <span class="eyebrow">Part 1 · Lesson 7/7</span>
+  <span class="eyebrow">Part 1 · Lesson 7/15</span>
   <h1>Many <span class="violet">heads</span>, many kinds of attention</h1>
   <p class="lede">One attention computation is a <span class="strong-ink">head</span>. A real layer runs several at once — same tokens, different Wq/Wk/Wv each — so the same word gets routed several different ways at the same time.</p>
   <div class="pill-row">
@@ -146,6 +146,7 @@
       <p><code>q2_it · k2_tired = 0.24·0.09 + 0.1·0.1 + 0.6·3.0 + 0.09·0 = 1.83</code> — the biggest score in this head → softmax → <code>tired ≈ 41%</code>. The <code>0.6·3.0</code> term is the whole story: <code>tired</code> is the only token with a large state value, and this head cranks the state axis up.</p>
       <p><b>Head 3 (action)</b> multiplies the <em>action</em> dimension by 3 instead. <code>q3_it = [0.24, 0.3, 0.06, 0.09]</code>, and now <code>sat</code> (the one high-action token) wins: <code>q3_it · k3_sat = 0.24·0.06 + 0.3·3.0 + 0.06·0.03 = 0.916</code> → softmax top is <code>sat</code>. Its lead is gentler than the other heads, so <code>sat</code>'s share sits around <code>25%</code> — still the winner, just a softer fan.</p>
       <p>Nothing here is looked up: each head calls <code>attend(qi, Wq_h, Wk_h)</code>, which recomputes <code>q</code>, all seven <code>q·k</code> logits, and the softmax from scratch. Change a matrix and the winner can change.</p>
+      <p><em>Simplification:</em> real heads each have their own <code>Wv</code> too; ours share one, because this page only shows the Q·K <em>routing</em> (which token wins), not the per-head Value blend.</p>
     </div>
   </details>
 </section>
@@ -178,7 +179,7 @@
 <!-- ============ PAGER ============ -->
 <nav class="pager wrap">
   <a href="attention-scoring.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Attention II: how attention computes</div></a>
-  <a href="index.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Back to the map</div></a>
+  <a href="residual-stream.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Where the blended vector goes</div></a>
 </nav>
 
 <footer><div class="wrap">

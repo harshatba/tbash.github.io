@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unembedding · Vector to Next-Word Logits — LLM Visual Course</title>
+<meta name="description" content="Turn the final vector into a next-word guess: dot it against every row of the embedding table to get one vocab-logit per word, then softmax. The toy predicts 'tired' at 30.3%.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* the final vector, framed + editable */
+  .vecframe{border:1px solid var(--line);border-radius:14px;background:rgba(11,16,32,.42);padding:16px 18px 6px;margin-bottom:8px}
+  .vecframe-cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--muted-2);line-height:1.55;margin-bottom:14px}
+  .vecframe-cap b{color:var(--cyan)}
+  .vgrid{display:flex;flex-wrap:wrap;gap:10px}
+  .vcell{flex:1 1 120px;min-width:120px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+  .vcell .vlab{font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .vcell .vnum{font-family:var(--mono);font-size:1.4rem;font-weight:600;color:var(--cyan);margin:4px 0 6px}
+  .vcell input[type=range]{accent-color:var(--cyan)}
+  .vctl-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0 26px}
+  .vctl-note{font-family:var(--mono);font-size:11px;color:var(--muted-2);letter-spacing:.04em}
+  .vctl-note b{color:var(--cyan)}
+
+  /* the worked winner dot product */
+  .worked{font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-left:2px solid var(--cyan);border-radius:8px;padding:12px 14px;margin-bottom:22px;overflow-x:auto;line-height:1.6}
+  .worked .wtok{color:var(--cyan);font-weight:600}
+  .worked .op{color:var(--cyan)}
+  .worked .res{color:var(--ink);font-weight:600}
+
+  /* ranked vocab-logit list */
+  .rank-head{display:grid;grid-template-columns:74px 62px 1fr 56px;gap:12px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);padding:0 4px 8px}
+  .rank-head span:nth-child(2),.rank-head span:nth-child(4){text-align:right}
+  .rank-tbl{display:flex;flex-direction:column;gap:8px}
+  .rank-row{display:grid;grid-template-columns:74px 62px 1fr 56px;gap:12px;align-items:center;font-family:var(--mono);font-size:13px;padding:4px;border-radius:8px;border:1px solid transparent;transition:border-color .3s ease,background .3s ease}
+  .rank-row .rk-tok{color:var(--amber)}
+  .rank-row .rk-logit{color:var(--muted-2);text-align:right}
+  .rank-row .rk-pct{color:var(--ink);font-weight:600;text-align:right}
+  .rank-row.win{border-color:rgba(110,231,135,.4);background:rgba(110,231,135,.07)}
+  .rank-row.win .rk-tok{color:var(--green)}
+  .rank-row.win .rk-pct{color:var(--green)}
+  .rk-track{height:16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .rk-fill{height:100%;width:0;background:linear-gradient(90deg,rgba(110,231,135,.5),var(--green));border-radius:5px 0 0 5px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  .rank-row.win .rk-fill{background:linear-gradient(90deg,rgba(110,231,135,.7),var(--green))}
+  @media(prefers-reduced-motion:reduce){.rk-fill{transition:none}}
+  @media(max-width:560px){
+    .rank-head{grid-template-columns:64px 1fr 50px}
+    .rank-head span:nth-child(2){display:none}
+    .rank-row{grid-template-columns:64px 1fr 50px;font-size:12px}
+    .rank-row .rk-logit{display:none}
+  }
+
+  .win-cap{margin-top:20px;font-size:.98rem;color:var(--ink);line-height:1.6;border-top:1px solid var(--line);padding-top:16px}
+  .win-cap .green{color:var(--green)}
+  .win-cap .amber{color:var(--amber)}
+  .honesty{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:12px;line-height:1.6;border-left:2px solid var(--line-strong);padding-left:12px}
+  .honesty b{color:var(--cyan)}
+
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500;text-align:right}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--amber)}
+  .hood table tr.win td{color:var(--green)}
+  .hood table tr.win td:first-child{color:var(--green)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">10 · Unembedding — vector to next-token logits</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 10/15</span>
+  <h1>From vector to a <span class="cyan">next-word</span> guess</h1>
+  <p class="lede">We finally have a final vector for the predicting position. To turn it into a word, score it against every token in the vocabulary with the very same dot product from lesson 2 — one score per word — then softmax. That's the whole trick behind "next token: cat, 61%."</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>rank the vocab, computed</b></span>
+    <span class="meta-pill">math: <b>one dot per word</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>After attention and the feed-forward step, the last position of "<span class="strong-ink">The cat sat because it was ___</span>" holds one 4-number vector. It doesn't spell a word — it's a point in meaning-space. So we ask a simple question: <b class="strong-ink">which vocabulary token does this vector point at most?</b></p>
+    <p>Score it against <b class="strong-ink">every</b> token by dotting it with that token's embedding row. Reuse the embedding table <code class="inl">E</code> <span class="strong-ink">backwards</span>: one dot product per word gives one raw score — a <span class="green">vocab-logit</span> — and softmax turns the whole list into next-token probabilities. (Real models often reuse the very same <code class="inl">E</code>, transposed — "tied weights.") This is the exact <code class="inl">a·b</code> from lesson 2, now scoring the output vector against the whole dictionary instead of scoring two words against each other.</p>
+    <p><b class="strong-ink">Two different logit lists — name the difference now.</b> Lessons 6–7 made <span class="violet">attention-logits</span>: one score <i>per token in the context</i> (~7 here). This page makes <span class="green">vocab-logits</span>: one score <i>per word in the whole vocabulary</i> (7 here, ~50,000 in a real model). Same softmax formula, two completely different lists — never call one "the logits" without saying which.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Rank the whole vocabulary · computed live</span><button class="btn" id="btnReset" type="button">Reset vector</button></div>
+
+    <!-- the final vector, framed + editable -->
+    <div class="vecframe">
+      <div class="vecframe-cap">The <b>running vector at the last position</b> (<code class="inl" style="font-size:.85em">was</code>, after attention + FFN) — a point in meaning-space, not yet a word:</div>
+      <div class="vgrid" id="vgrid"><!-- 4 editable dim cells injected --></div>
+    </div>
+    <div class="vctl-row">
+      <span class="vctl-note">nudge any slider → every <b>logit</b> and the whole ranking recompute + re-sort</span>
+    </div>
+
+    <!-- the winner's dot, worked out -->
+    <div class="worked" id="worked"><!-- winner dot product written out --></div>
+
+    <!-- ranked vocab-logit list -->
+    <div class="rank-head"><span>token</span><span>logit</span><span>softmax probability</span><span>%</span></div>
+    <div class="rank-tbl" id="rankTbl"><!-- 7 ranked rows injected --></div>
+
+    <div class="win-cap" id="winCap"><!-- prediction read --></div>
+    <p class="honesty" id="honesty"></p>
+
+    <p class="stage-note"><span class="key cyan">TRY →</span> Drag <b>state</b> down toward 0 and watch <code class="inl">tired</code> lose the lead to <code class="inl">cat</code> — the vector stops pointing at the state axis <code class="inl">tired</code> lives on. Every logit is <code class="inl">final_vector · E[word]</code>, recomputed on each move — nothing here is replayed.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers (default vector <span style="color:var(--cyan)">[0.9, 0.3, 1.4, 0.1]</span>)</summary>
+    <div class="hood-body">
+      <p>Each <span class="green">vocab-logit</span> is the final vector dotted against one embedding row (<code>logit(t) = dot(UNEMBED_VEC, E[t])</code>), then softmax over all seven. Sum of <code>e^(z − 1.70)</code> is <code>3.305</code>:</p>
+      <div class="wrapx"><table>
+        <tr><th>token</th><th>final · E[token], written out</th><th>logit</th><th>e^(z−1.70)</th><th>softmax</th></tr>
+        <tr class="win"><td>tired</td><td>0.9·0.3 + 0.3·0.1 + 1.4·1.0 + 0.1·0</td><td>1.70</td><td>1.000</td><td>30.3%</td></tr>
+        <tr><td>cat</td><td>0.9·1.0 + 0.3·0.2 + 1.4·0.1 + 0.1·0</td><td>1.10</td><td>0.549</td><td>16.6%</td></tr>
+        <tr><td>it</td><td>0.9·0.8 + 0.3·0.1 + 1.4·0.2 + 0.1·0.3</td><td>1.06</td><td>0.527</td><td>16.0%</td></tr>
+        <tr><td>was</td><td>0.9·0.1 + 0.3·0.5 + 1.4·0.4 + 0.1·0.2</td><td>0.82</td><td>0.415</td><td>12.6%</td></tr>
+        <tr><td>sat</td><td>0.9·0.2 + 0.3·1.0 + 1.4·0.1 + 0.1·0</td><td>0.62</td><td>0.340</td><td>10.3%</td></tr>
+        <tr><td>because</td><td>0.9·0 + 0.3·0.1 + 1.4·0.2 + 0.1·0.9</td><td>0.40</td><td>0.273</td><td>8.2%</td></tr>
+        <tr><td>The</td><td>0.9·0 + 0.3·0 + 1.4·0 + 0.1·1.0</td><td>0.10</td><td>0.202</td><td>6.1%</td></tr>
+      </table></div>
+      <p>Predicted next token = <code>tired</code> at <b style="color:var(--green)">30.3%</b> (Σ = 100.0%). So "cat 61%" in any explainer is exactly this: the final vector dotted against every embedding row, softmaxed — nothing more exotic. The runners-up <code>cat</code> and <code>it</code> are the sentence's subject, which is a sensible next-guess for "…it was ___".</p>
+      <p><b style="color:var(--cyan)">Attention-logits vs vocab-logits.</b> Lesson 6's seven scores were <span class="violet">one-per-token in the context</span> — <code>q·k</code>, softmaxed into attention weights (how much to listen to each token). These seven are <span class="green">one-per-word in the vocabulary</span> — the final vector dotted against every row of <code>E</code>, softmaxed into next-token probabilities. <b>Same softmax formula, different lists.</b> Here both lists happen to be length 7; in a real model the first is a few thousand and the second is ~50,000.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Predicting the next word is a special lookup, or a separate classifier head with its own giant table.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It's the <b>same dot product</b> as similarity, run against every embedding row. The model scores its final vector against the whole vocabulary and softmaxes — often reusing the very same embedding table, transposed.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>To turn a vector into a word: <b>dot it against every row of the embedding table</b> → one vocab-logit per word → softmax → next-token probabilities. That's where "next token: cat, 61%" comes from.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Where does "next token: <code class="inl">cat</code>, 61%" come from?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">A stored table mapping each sentence to its next word.</button>
+      <button class="opt" data-correct="1">The final vector dotted against every row of the embedding table, then softmax.</button>
+      <button class="opt" data-correct="0">The highest attention weight from lesson 6.</button>
+    </div>
+    <div class="why"><b>Why:</b> the unembedding scores the output vector against every vocabulary token with one dot product each — those are the vocab-logits — and softmax turns them into next-token probabilities. Attention weights (attention-logits) are a different list entirely.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="feed-forward.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">The FFN: each token thinks alone</div></a>
+  <a href="sampling.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Three dials on the next-word distribution</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Unembedding — the final vector, dotted against EVERY row of E, COMPUTED live.
+   logit(t) = dot(vec, E[t]) for every t in TOKENS  ->  softmax  ->  ranked list.
+   Recompute on every slider move; nothing is replayed.
+   Globals from course-data.js: TOKENS, E, DIM_LABELS, dot, softmax, UNEMBED_VEC.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+  const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const f2  = (n)=> n.toFixed(2);
+  const pct = (n)=> (n*100).toFixed(1)+'%';
+  // trim to <=2 decimals, drop trailing zeros ("1.00"->"1","0.90"->"0.9")
+  const trim = (n)=>{ let s=(Math.round(n*100)/100).toFixed(2); s=s.replace(/\.?0+$/,''); return s==='-0'?'0':s; };
+
+  // live editable copy of the final vector (starts at the documented default)
+  const vec = UNEMBED_VEC.slice();
+
+  /* ---------- build the 4 editable dim cells ---------- */
+  const vgrid = $('#vgrid');
+  vec.forEach((val,d)=>{
+    const cell = document.createElement('div');
+    cell.className = 'vcell';
+    cell.innerHTML =
+      `<div class="vlab">${DIM_LABELS[d]}</div>`+
+      `<div class="vnum" id="vnum${d}">${f2(val)}</div>`+
+      `<input type="range" min="0" max="2" step="0.05" value="${val}" `+
+      `aria-label="${DIM_LABELS[d]} dimension of the final vector" id="vin${d}">`;
+    vgrid.appendChild(cell);
+  });
+  vec.forEach((_,d)=>{
+    $('#vin'+d).addEventListener('input', (e)=>{
+      vec[d] = parseFloat(e.target.value);
+      $('#vnum'+d).textContent = f2(vec[d]);
+      render(true);
+    });
+  });
+
+  /* ---------- compute: one dot per vocab word, then softmax ---------- */
+  function compute(){
+    const logits = TOKENS.map(t => dot(vec, E[t]));          // vocab-logit per word (reuse lesson-2 dot)
+    const probs  = softmax(logits);                          // same softmax as everywhere
+    const rows = TOKENS.map((t,i)=>({t, logit:logits[i], p:probs[i]}));
+    rows.sort((a,b)=> b.logit - a.logit);                    // rank descending
+    return rows;
+  }
+
+  /* ---------- the winner's dot product, written out ---------- */
+  function renderWorked(winTok){
+    const e = E[winTok];
+    const terms = vec.map((c,i)=> `${trim(c)}<span class="op">·</span>${trim(e[i])}`).join(' + ');
+    const val = dot(vec, E[winTok]);
+    $('#worked').innerHTML =
+      `<span class="wtok">${winTok}</span> &nbsp;logit = final · E[${winTok}] = `+
+      `${terms} = <span class="res">${f2(val)}</span>`;
+  }
+
+  /* ---------- ranked bar list ---------- */
+  function renderRank(rows, animate){
+    const box = $('#rankTbl'); box.innerHTML='';
+    const maxP = Math.max(...rows.map(r=>r.p));
+    rows.forEach((r,i)=>{
+      const row = document.createElement('div');
+      row.className = 'rank-row' + (i===0?' win':'');
+      row.innerHTML =
+        `<span class="rk-tok">${r.t}</span>`+
+        `<span class="rk-logit">${f2(r.logit)}</span>`+
+        `<div class="rk-track"><div class="rk-fill" data-w="${r.p/maxP}"></div></div>`+
+        `<span class="rk-pct">${pct(r.p)}</span>`;
+      box.appendChild(row);
+    });
+    const fills = box.querySelectorAll('.rk-fill');
+    const paint = ()=> fills.forEach(el=> el.style.width = (parseFloat(el.dataset.w)*100)+'%');
+    if(animate && !REDUCE){ requestAnimationFrame(()=> requestAnimationFrame(paint)); }
+    else { paint(); }
+  }
+
+  /* ---------- prediction read + honesty note ---------- */
+  function renderCaps(rows){
+    const win = rows[0], r2 = rows[1], r3 = rows[2];
+    $('#winCap').innerHTML =
+      `Predicted next token → <b class="green">${win.t}</b> at <b class="green">${pct(win.p)}</b>. `+
+      `Runners-up <b class="amber">${r2.t}</b> (${pct(r2.p)}) and <b class="amber">${r3.t}</b> (${pct(r3.p)}) — `+
+      `for "…it was ___", the sentence's subject is a reasonable second guess. Illustrative, not literal.`;
+    $('#honesty').innerHTML =
+      `<b>Honesty note:</b> a real vocabulary is ~50,000 rows, so real logits and this exact ranking differ. `+
+      `The <b>mechanism</b> — one dot product per word, then softmax — is the real thing.`;
+  }
+
+  /* ---------- master render ---------- */
+  function render(animate){
+    const rows = compute();
+    renderWorked(rows[0].t);
+    renderRank(rows, animate);
+    renderCaps(rows);
+  }
+
+  /* ---------- reset ---------- */
+  $('#btnReset').addEventListener('click', ()=>{
+    UNEMBED_VEC.forEach((v,d)=>{
+      vec[d] = v;
+      $('#vin'+d).value = v;
+      $('#vnum'+d).textContent = f2(v);
+    });
+    render(true);
+  });
+
+  /* ---------- init ---------- */
+  render(false);
+})();
+</script>
+</body>
+</html>

@@ -91,7 +91,7 @@
     <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
     <span class="here">04 · One neuron</span>
   </nav>
-  <span class="eyebrow">Part 1 · Lesson 4/7</span>
+  <span class="eyebrow">Part 1 · Lesson 4/15</span>
   <h1>One <span class="rose">neuron</span>: multiply, add, squish</h1>
   <p class="lede">A single neuron takes a few numbers, multiplies each by its own weight, adds them up, and bends the total through a curve. That is the whole operation — billions of these are the model.</p>
   <div class="pill-row">
@@ -162,7 +162,7 @@
       </div>
     </div>
 
-    <p class="stage-note"><span class="key rose">TRY →</span> Drag <b>x₁</b> all the way up and watch the sum climb past the edges — yet <code class="mono">tanh</code> flattens the output near <b>+1</b>. Flip to <b>no activation</b> and the same neuron becomes a plain straight line that shoots off the chart, unbounded.</p>
+    <p class="stage-note"><span class="key rose">TRY →</span> Drag <b>x₁</b> all the way up and watch the sum grow (to about <b>+3</b>) — yet <code class="mono">tanh</code> still flattens the output near <b>+1</b>. Flip to <b>no activation</b> and the same neuron becomes a plain straight line whose <b>output</b> shoots off the chart, unbounded.</p>
   </div>
 </section>
 
@@ -173,7 +173,7 @@
     <div class="hood-body">
       <p>At the defaults <code>x = [0.90, 0.30, 0.60]</code> with weights <code>w = [1.3, −0.9, 0.7]</code> and bias <code>0.1</code>:</p>
       <p><code>0.90 × 1.3 = 1.17</code>, &nbsp;<code>0.30 × −0.9 = −0.27</code>, &nbsp;<code>0.60 × 0.7 = 0.42</code>. &nbsp;Sum: <code>1.17 + (−0.27) + 0.42 + 0.1 = 1.42</code>. &nbsp;Squish: <code>tanh(1.42) = 0.89</code>.</p>
-      <p>Drag <code>x₁</code> to a large value and the sum keeps growing, but <code>tanh</code> flattens near <code>±1</code> — that is the squish saving the number from blowing up. With <b>no activation</b> the neuron is only <code>out = Σxw + b</code>, a straight line; ten of them stacked is still one straight line. The curve is what lets stacked layers build up nonlinear meaning. The whole computation is one line of code: <code>out = Math.tanh(x.reduce((a,xi,i)=&gt;a+xi*w[i],0)+b)</code>.</p>
+      <p>Drag <code>x₁</code> to its max and the sum reaches about <code>+3</code>; <code>tanh</code> flattens the output near <code>+1</code> regardless. With <b>no activation</b> the output <code>= Σxw + b</code> would keep climbing with no ceiling — it is the <b>output</b> that blows up without the squish, not the sum. And a straight line stays straight: ten un-squished neurons stacked is still one straight line. The curve is what lets stacked layers build up nonlinear meaning. The whole computation is one line of code: <code>out = Math.tanh(x.reduce((a,xi,i)=&gt;a+xi*w[i],0)+b)</code>.</p>
     </div>
   </details>
 </section>

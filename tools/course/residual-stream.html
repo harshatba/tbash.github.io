@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Residual Stream · Add Back, Don't Replace — LLM Visual Course</title>
+<meta name="description" content="Attention's blended output isn't swapped in for the token's vector — it's added back onto it. Toggle add vs replace and watch it's vector stay a running total.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* segmented add/replace toggle */
+  .mode-row{display:flex;justify-content:center;margin-bottom:8px}
+  .seg{display:inline-flex;background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:4px;gap:4px}
+  .seg button{
+    font-family:var(--mono);font-size:13px;letter-spacing:.02em;
+    color:var(--muted);background:transparent;border:0;border-radius:8px;
+    padding:9px 18px;cursor:pointer;transition:.16s;white-space:nowrap;
+  }
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{color:var(--violet);background:rgba(157,140,255,.14);box-shadow:0 0 0 1px rgba(157,140,255,.3) inset}
+  .seg button:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  .mode-cap{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--muted-2);text-align:center;margin:2px 0 22px}
+  .mode-cap b{color:var(--violet)}
+
+  /* formula strip */
+  .formula{
+    font-family:var(--mono);font-size:12.5px;color:var(--muted);
+    background:var(--bg-2);border:1px solid var(--line);border-radius:9px;
+    padding:11px 14px;text-align:center;margin:0 auto 20px;max-width:460px;overflow-x:auto;
+  }
+  .formula .op{color:var(--violet)}
+  .formula .cy{color:var(--cyan)}
+  .formula .mut{color:var(--muted-2)}
+
+  /* the ledger: one row per dimension */
+  .ledger{display:flex;flex-direction:column;gap:6px;max-width:600px;margin:0 auto}
+  .lrow{
+    display:grid;
+    grid-template-columns:96px 58px 20px 58px 18px 64px 1fr;
+    gap:8px;align-items:center;
+    font-family:var(--mono);font-size:13px;
+    padding:9px 12px;border-radius:9px;background:var(--bg-2);border:1px solid transparent;
+  }
+  .lrow.head{background:transparent;padding:2px 12px 4px;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .lrow.hi{border-color:rgba(157,140,255,.4);background:rgba(157,140,255,.08)}
+  .dl{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrow.hi .dl{color:var(--violet)}
+  .c-old{color:var(--cyan);text-align:right;transition:.2s}
+  .c-op{color:var(--violet);text-align:center}
+  .c-del{color:var(--violet);text-align:right}
+  .c-eq{color:var(--muted-2);text-align:center}
+  .c-new{color:var(--ink);font-weight:600;text-align:right}
+  .lrow.hi .c-new{color:var(--violet)}
+  .lbar{height:12px;background:rgba(140,160,210,.10);border-radius:5px;overflow:hidden}
+  .lfill{height:100%;width:0;background:linear-gradient(90deg,rgba(157,140,255,.5),var(--violet));border-radius:5px;transition:width .5s cubic-bezier(.4,0,.2,1)}
+  @media(prefers-reduced-motion:reduce){.lfill{transition:none}}
+
+  /* replace mode: the old value is discarded */
+  .ledger.replace .c-old{color:var(--muted-2);text-decoration:line-through;opacity:.55}
+  .ledger.replace .c-op{color:var(--rose)}
+  .ledger.replace .c-del{color:var(--muted-2)}
+  .ledger.replace .lfill{background:linear-gradient(90deg,rgba(255,122,138,.45),var(--rose))}
+
+  @media(max-width:600px){
+    .lrow{grid-template-columns:74px 1fr 60px;grid-template-areas:"dl calc new" "bar bar bar";row-gap:7px;column-gap:8px}
+    .lrow.head{display:none}
+    .dl{grid-area:dl}
+    .c-old{grid-area:calc;text-align:left}
+    .c-op,.c-del,.c-eq{display:none}
+    .c-new{grid-area:new}
+    .lbar{grid-area:bar}
+    /* show only the worked calc on mobile (hide the redundant bare number) */
+    .c-old{font-size:0;text-decoration:none;opacity:1}
+    .c-old::after{content:attr(data-calc);color:var(--muted);font-size:13px}
+    .ledger.replace .c-old::after{color:var(--muted-2)}
+  }
+
+  /* the resulting vector, as tiles */
+  .resvec{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin:22px 0 4px}
+  .rtile{flex:1 1 100px;min-width:100px;max-width:150px;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:11px 12px;text-align:center}
+  .rtile .rlab{font-family:var(--mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-2)}
+  .rtile .rnum{font-family:var(--mono);font-size:1.42rem;font-weight:600;color:var(--cyan);margin-top:5px;transition:.2s}
+  .rtile.dom{border-color:rgba(157,140,255,.45);background:rgba(157,140,255,.08)}
+  .rtile.dom .rnum{color:var(--violet)}
+
+  .resvec-lab{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-2);text-align:center;margin-bottom:2px}
+
+  .read{margin-top:20px;font-size:1rem;color:var(--ink);line-height:1.6;border-top:1px solid var(--line);padding-top:18px}
+  .read.replace-read{color:var(--muted)}
+  .read .amber{color:var(--amber)}
+  .read .cyan{color:var(--cyan)}
+  .read .violet{color:var(--violet)}
+  .read .rose{color:var(--rose)}
+  .read b{color:var(--ink);font-weight:600}
+
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500;text-align:right}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--cyan)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">8 · Residual stream — add back, don't replace</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 8/15</span>
+  <h1>Where does the <span class="violet">blended vector</span> go?</h1>
+  <p class="lede">Attention just handed <code class="inl">it</code> a fresh 4-number blend. The model does <b class="strong-ink">not</b> throw away <code class="inl">it</code>'s old vector and swap the blend in — it <b class="strong-ink">adds the blend back on</b>. The vector becomes a running total that every layer nudges, never overwrites.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~4 min</b></span>
+    <span class="meta-pill">🎚 <b>add vs replace, computed</b></span>
+    <span class="meta-pill">math: <b>one addition</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Last page left a loose end: attention produced a blended output vector for <code class="inl">it</code> — <code class="inl">[0.62, 0.24, 0.25, 0.10]</code> — and then… what? A tempting guess is that this blend <i>becomes</i> <code class="inl">it</code>'s new vector, replacing the old one. It doesn't.</p>
+    <p>Instead the model does <b class="strong-ink">new = old + Δattn</b>, element by element: it keeps everything <code class="inl">it</code> already was and <i>adds</i> the refinement on top. That running total has a name — the <span class="violet">residual stream</span> — and it's the same vector that flows through the whole network, getting nudged layer after layer.</p>
+    <p>Why add instead of replace? <b class="strong-ink">Replacing would erase the token's own identity every single layer.</b> Adding lets each layer <i>contribute</i> without destroying what came before — the original meaning is always still in there. Flip the toggle below and watch the difference.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>The residual step · computed live for <span style="color:var(--amber)">it</span></span></div>
+
+    <div class="mode-row">
+      <div class="seg" role="tablist" aria-label="How attention's output is combined">
+        <button id="mAdd" class="on" role="tab" aria-selected="true">Add back</button>
+        <button id="mRep" role="tab" aria-selected="false">Replace</button>
+      </div>
+    </div>
+    <div class="mode-cap" id="modeCap"></div>
+
+    <div class="formula" id="formula"></div>
+
+    <div class="ledger" id="ledger">
+      <div class="lrow head">
+        <span class="dl">dimension</span>
+        <span class="c-old">old e</span>
+        <span class="c-op"></span>
+        <span class="c-del">Δ attn</span>
+        <span class="c-eq"></span>
+        <span class="c-new">new</span>
+        <span></span>
+      </div>
+      <!-- dim rows injected -->
+    </div>
+
+    <div class="resvec-lab" id="resvecLab"></div>
+    <div class="resvec" id="resvec"><!-- result tiles --></div>
+
+    <div class="read" id="read"></div>
+
+    <p class="stage-note"><span class="key violet">TRY →</span> Toggle <b>Add back</b> ⟷ <b>Replace</b>. In Add mode each dimension shows its sum written out (<code class="inl" style="font-size:.82em">0.8 + 0.62 = 1.42</code>) and <code class="inl">it</code>'s original <b>0.8</b> animacy survives. Flip to Replace and watch the old column strike through — <code class="inl">it</code>'s <b>0.8</b> animacy and <b>0.3</b> function vanish. The token <i>forgot itself.</i></p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers (residual token = <span style="color:var(--cyan)">it</span>)</summary>
+    <div class="hood-body">
+      <p>The blend <code>Δattn</code> is <b>recomputed live</b> — it's <code>attend(indexOf('it'), Wq, Wk).out</code>, the exact lesson-6 pipeline (q·k → softmax → weighted blend of Values), not a stored constant.</p>
+      <div class="wrapx"><table>
+        <tr><th>dim</th><th>old <code style="background:none;color:var(--muted-2)">e_it</code></th><th>Δattn</th><th>add: old + Δ</th><th>replace: Δ only</th></tr>
+        <tr><td>animacy</td><td>0.80</td><td>0.62</td><td>1.42</td><td>0.62</td></tr>
+        <tr><td>action</td><td>0.10</td><td>0.24</td><td>0.34</td><td>0.24</td></tr>
+        <tr><td>state</td><td>0.20</td><td>0.25</td><td>0.45</td><td>0.25</td></tr>
+        <tr><td>function</td><td>0.30</td><td>0.10</td><td>0.40</td><td>0.10</td></tr>
+      </table></div>
+      <p><code>e_it = [0.8, 0.1, 0.2, 0.3]</code>; <code>Δattn = [0.62, 0.24, 0.25, 0.10]</code>; residual <code>new = e_it + Δattn = [1.42, 0.34, 0.45, 0.40]</code>. In Replace mode you'd instead get <code>[0.62, 0.24, 0.25, 0.10]</code> — <code>it</code> loses its own <b>animacy 0.8</b> and <b>function 0.3</b> entirely.</p>
+      <p>Every layer does exactly this add. The vector is a <b>running total</b>, and the original embedding is never overwritten — which is a big part of why very deep models stay trainable (gradients have a clean path straight down the sum). This same <code>[1.42, 0.34, 0.45, 0.40]</code> is the input to the FFN on the next page.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Attention overwrites the token's vector, swapping in the blend of what it attended to.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It <b>adds</b> the blend onto the vector the token already had: <code class="inl">new = old + Δattn</code>. The token keeps its identity and gains context; that ever-growing running total is the residual stream.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>Attention's output is <b>added back</b> onto the token's own vector — refine, don't replace. The vector is a <b>running total</b> the whole network keeps nudging, so the original meaning is always still in there.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">After attention, <code class="inl">it</code>'s vector becomes…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">replaced entirely by the blend of what it attended to.</button>
+      <button class="opt" data-correct="1">its old vector <b>plus</b> the blend, added element-wise.</button>
+      <button class="opt" data-correct="0">the average of all seven tokens' vectors.</button>
+    </div>
+    <div class="why"><b>Why:</b> the residual stream adds the attention output back on — <i>refine, don't replace</i> — so the original meaning is always still in there and the vector is a running total across layers.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="attention-heads.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Many heads, many kinds of attention</div></a>
+  <a href="feed-forward.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">The FFN: each token thinks alone</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Residual stream — add back, don't replace, COMPUTED live.
+   e = E['it'];  A = attend(indexOf('it'), Wq, Wk).out  (the real lesson-6 blend).
+   Add mode:     new[d] = e[d] + A[d]
+   Replace mode: new[d] = A[d]  (old discarded)
+   RESID_VEC is only the verification target — we recompute, never read it.
+   Globals from course-data.js: TOKENS, E, Wq, Wk, attend, DIM_LABELS.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+
+  // trim to <=2 dp, drop trailing zeros; keep the sign clean
+  const trim = (n)=>{ let s=(Math.round(n*100)/100).toFixed(2); s=s.replace(/\.?0+$/,''); return s==='-0'?'0':s; };
+  const f2 = (n)=> n.toFixed(2);
+
+  const TOKEN = 'it';
+  const e = E[TOKEN];                                   // [0.8, 0.1, 0.2, 0.3]
+  const A = attend(TOKENS.indexOf(TOKEN), Wq, Wk).out;  // recomputed blend, NOT RESID_VEC
+  let mode = 'add';                                     // 'add' | 'replace'
+
+  const newVec = ()=> mode==='add' ? e.map((x,d)=> x + A[d]) : A.slice();
+
+  const ledger  = $('#ledger');
+  const headRow = ledger.querySelector('.lrow.head');
+
+  function render(animate){
+    const nv = newVec();
+    const maxAbs = Math.max(...nv.map(Math.abs), 1e-6);
+    // dominant dim (largest new value)
+    let dom = 0; nv.forEach((v,d)=>{ if(v>nv[dom]) dom=d; });
+
+    /* ---- formula strip ---- */
+    $('#formula').innerHTML = mode==='add'
+      ? 'residual: <span class="cy">new</span> = old <span class="op">+</span> Δattn <span class="mut">(element-wise)</span>'
+      : 'replace: <span class="cy">new</span> = Δattn <span class="mut">— old discarded</span>';
+
+    $('#modeCap').innerHTML = mode==='add'
+      ? 'mode: <b>Add back</b> — attention refines the vector <code class="inl" style="font-size:.82em">it</code> already had'
+      : 'mode: <b>Replace</b> — the blend is swapped in and the old vector is thrown away';
+
+    ledger.classList.toggle('replace', mode==='replace');
+
+    /* ---- rebuild dim rows (keep the header) ---- */
+    Array.from(ledger.querySelectorAll('.lrow:not(.head)')).forEach(r=>r.remove());
+    DIM_LABELS.forEach((lab,d)=>{
+      const row = document.createElement('div');
+      row.className = 'lrow' + (d===dom?' hi':'');
+      const opSym = mode==='add' ? '+' : '✗';
+      // mobile-collapsed worked expression lives in data-calc on .c-old
+      const calc = mode==='add'
+        ? `${trim(e[d])} + ${trim(A[d])} = ${trim(nv[d])}`
+        : `${trim(e[d])} discarded → ${trim(A[d])}`;
+      row.innerHTML =
+        `<span class="dl">${lab}</span>`+
+        `<span class="c-old" data-calc="${calc}">${trim(e[d])}</span>`+
+        `<span class="c-op">${opSym}</span>`+
+        `<span class="c-del">${trim(A[d])}</span>`+
+        `<span class="c-eq">=</span>`+
+        `<span class="c-new">${trim(nv[d])}</span>`+
+        `<div class="lbar"><div class="lfill" data-w="${Math.abs(nv[d])/maxAbs}"></div></div>`;
+      ledger.appendChild(row);
+    });
+    // paint bars
+    const fills = ledger.querySelectorAll('.lfill');
+    const paint = ()=> fills.forEach(el=> el.style.width = (parseFloat(el.dataset.w)*100)+'%');
+    const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(animate && !REDUCE){ fills.forEach(el=>el.style.width='0'); requestAnimationFrame(()=>requestAnimationFrame(paint)); }
+    else paint();
+
+    /* ---- result vector tiles ---- */
+    $('#resvecLab').textContent = mode==='add' ? "it's new running-total vector" : "it's replaced vector";
+    const rv = $('#resvec'); rv.innerHTML='';
+    nv.forEach((v,d)=>{
+      const t = document.createElement('div');
+      t.className = 'rtile' + (d===dom?' dom':'');
+      t.innerHTML = `<div class="rlab">${DIM_LABELS[d]}</div><div class="rnum">${f2(v)}</div>`;
+      rv.appendChild(t);
+    });
+
+    /* ---- human read ---- */
+    const read = $('#read');
+    if(mode==='add'){
+      read.className = 'read';
+      read.innerHTML =
+        `<code class="inl">it</code> still remembers it was <b class="cyan">animacy-${trim(e[0])}</b> <code class="inl">it</code> — that ${trim(e[0])} is right there in the sum — and it's now pushed toward `+
+        `<b class="amber">cat</b> (animacy climbs to <b class="violet">${trim(nv[0])}</b>). Nothing was thrown away: the vector is a <b>running total</b>, the residual stream.`;
+    } else {
+      read.className = 'read replace-read';
+      read.innerHTML =
+        `<code class="inl">it</code>'s original <b class="rose">${trim(e[0])} animacy</b> and <b class="rose">${trim(e[3])} function</b> are <b>gone</b> — overwritten wholesale by the blend. `+
+        `The token <b>forgot itself.</b> Do this every layer and the original meaning is erased over and over — which is exactly why real models add instead.`;
+    }
+  }
+
+  /* ---- toggle wiring ---- */
+  const bAdd = $('#mAdd'), bRep = $('#mRep');
+  function setMode(m){
+    mode = m;
+    const addOn = m==='add';
+    bAdd.classList.toggle('on', addOn);   bAdd.setAttribute('aria-selected', addOn?'true':'false');
+    bRep.classList.toggle('on', !addOn);  bRep.setAttribute('aria-selected', !addOn?'true':'false');
+    render(true);
+  }
+  bAdd.addEventListener('click', ()=> setMode('add'));
+  bRep.addEventListener('click', ()=> setMode('replace'));
+
+  /* ---- init ---- */
+  render(true);
+
+  /* verify against the target the spec documents (dev sanity, no UI impact) */
+  try{
+    const chk = e.map((x,d)=> Math.round((x+A[d])*100)/100);
+    if(typeof RESID_VEC!=='undefined' && chk.some((v,i)=> Math.abs(v-RESID_VEC[i])>1e-9))
+      console.warn('residual mismatch', chk, RESID_VEC);
+  }catch(_){}
+})();
+</script>
+</body>
+</html>
