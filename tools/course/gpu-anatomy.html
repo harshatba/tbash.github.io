@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPU Anatomy — LLM Visual Course</title>
+<meta name="description" content="A GPU is a memory hierarchy: registers, a tiny 192 KB on-chip SRAM per SM, and 80 GB of slow VRAM. Place weights, the KV cache, a score matrix and a Flash tile on a log ruler and watch which tier lights — only the 56 KiB tile fits on-chip. VRAM bandwidth is the wall.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  /* chips — the placeable things a model holds */
+  .chips{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+  .chip{
+    font-family:var(--mono);font-size:12.5px;letter-spacing:.02em;color:var(--muted);
+    background:var(--bg-2);border:1px solid var(--line);border-radius:10px;
+    padding:9px 14px;cursor:pointer;transition:.16s;display:inline-flex;align-items:center;gap:8px;
+  }
+  .chip:hover{color:var(--ink);border-color:var(--line-strong)}
+  .chip:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .chip::before{content:"";width:9px;height:9px;border-radius:3px;background:var(--c,var(--muted-2));opacity:.55;transition:.16s}
+  .chip.on{color:var(--ink);background:var(--panel-2);border-color:var(--cc,var(--line-strong));box-shadow:0 0 0 1px var(--cc,transparent) inset}
+  .chip.on::before{opacity:1}
+  .chip.wt{--c:var(--rose);--cc:rgba(255,122,138,.5)}
+  .chip.kv{--c:var(--cyan);--cc:rgba(67,214,200,.5)}
+  .chip.sc{--c:var(--violet);--cc:rgba(157,140,255,.5)}
+  .chip.fl{--c:var(--violet);--cc:rgba(157,140,255,.5)}
+
+  /* controls */
+  .ctrls{display:flex;flex-direction:column;gap:16px;margin-bottom:22px}
+  .ctl{display:flex;flex-direction:column;gap:7px}
+  .ctl.dim{opacity:.4}
+  .ctl-top{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .ctl-lab{font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .ctl-val{font-family:var(--mono);font-size:1.02rem;font-weight:600;color:var(--ink)}
+  .ctl-val b{color:var(--cyan)}
+  input[type=range]{accent-color:var(--cyan)}
+
+  /* segmented precision toggle */
+  .seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:9px;overflow:hidden;align-self:flex-start}
+  .seg button{
+    font-family:var(--mono);font-size:12.5px;letter-spacing:.04em;color:var(--muted);
+    background:var(--bg-2);border:0;border-right:1px solid var(--line);padding:7px 15px;cursor:pointer;transition:.16s
+  }
+  .seg button:last-child{border-right:0}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{color:var(--rose);background:rgba(255,122,138,.12);box-shadow:0 0 0 1px rgba(255,122,138,.3) inset}
+  .seg button:focus-visible{outline:2px solid var(--rose);outline-offset:-2px}
+
+  /* tier pills — the hierarchy, fast/tiny to slow/huge */
+  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:2px 0 16px}
+  @media(max-width:560px){.tiers{grid-template-columns:1fr}}
+  .tier{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;transition:.2s;position:relative}
+  .tier .tn{font-family:var(--disp);font-weight:600;font-size:.98rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .tier .tsub{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:5px;line-height:1.5}
+  .tier .tbw{font-family:var(--mono);font-size:11px;margin-top:6px;color:var(--muted-2)}
+  .tier.lit{background:rgba(67,214,200,.08);border-color:rgba(67,214,200,.45);box-shadow:0 0 20px rgba(67,214,200,.12)}
+  .tier.lit .tn{color:var(--cyan)}
+  .tier.lit.cap{background:rgba(255,122,138,.08);border-color:rgba(255,122,138,.45);box-shadow:0 0 20px rgba(255,122,138,.12)}
+  .tier.lit.cap .tn{color:var(--rose)}
+  .tier .flag{position:absolute;top:11px;right:12px;font-family:var(--mono);font-size:10px;letter-spacing:.05em;opacity:0;transition:.2s}
+  .tier.lit .flag{opacity:1;color:var(--cyan)}
+  .tier.lit.cap .flag{color:var(--rose)}
+
+  /* size-ruler plot */
+  .plot-wrap{background:rgba(11,16,32,.42);border:1px solid var(--line);border-radius:14px;padding:14px 12px 8px;margin:8px 0 16px}
+  .ruler-svg{width:100%;height:auto;display:block;max-width:660px;margin:0 auto}
+  .ruler-svg .zone-sram{fill:rgba(67,214,200,.07)}
+  .ruler-svg .zone-vram{fill:rgba(120,150,220,.05)}
+  .ruler-svg .zone-cap{fill:rgba(255,122,138,.07)}
+  .ruler-svg .track{fill:rgba(11,16,32,.5);stroke:var(--line);stroke-width:1}
+  .ruler-svg .thr{stroke-width:1.3;stroke-dasharray:4 4}
+  .ruler-svg .thr.sram{stroke:var(--cyan);opacity:.8}
+  .ruler-svg .thr.vram{stroke:var(--muted);opacity:.55}
+  .ruler-svg .thr-lab{font-family:var(--mono);font-size:11px}
+  .ruler-svg .thr-lab.sram{fill:var(--cyan)}
+  .ruler-svg .thr-lab.vram{fill:var(--muted)}
+  .ruler-svg .zone-lab{font-family:var(--mono);font-size:11px;letter-spacing:.04em}
+  .ruler-svg .axis{stroke:var(--line-strong);stroke-width:1}
+  .ruler-svg .tick{font-family:var(--mono);font-size:11px;fill:var(--muted-2)}
+  .ruler-svg .grid{stroke:var(--line);stroke-width:1;opacity:.5}
+  .ruler-svg .item-fill{transition:none}
+  .ruler-svg .item-cap{stroke:#0b1020;stroke-width:2}
+  .ruler-svg .item-lab{font-family:var(--mono);font-size:12.5px;font-weight:600}
+
+  .caption{font-family:var(--body);font-size:.92rem;color:var(--muted);text-align:center;margin:0 auto 4px;max-width:60ch;line-height:1.55}
+  .caption b{color:var(--ink);font-weight:500}
+
+  /* readout cards */
+  .reads{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0 6px}
+  @media(max-width:560px){.reads{grid-template-columns:1fr}}
+  .read{background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:14px 15px;text-align:center}
+  .read .rlab{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted-2)}
+  .read .rnum{font-family:var(--mono);font-size:1.6rem;font-weight:600;margin-top:6px;line-height:1.05;color:var(--ink)}
+  .read .rsub{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);margin-top:6px}
+  .read.tier-read .rnum{font-size:1.15rem;margin-top:9px}
+
+  /* tier badge */
+  .bneck{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:12.5px;font-weight:600;letter-spacing:.03em;padding:5px 12px;border-radius:8px}
+  .bneck::before{content:"";width:9px;height:9px;border-radius:50%}
+  .bn-sram{color:var(--cyan);background:rgba(67,214,200,.1);border:1px solid rgba(67,214,200,.35)}
+  .bn-sram::before{background:var(--cyan)}
+  .bn-vram{color:var(--muted);background:rgba(120,150,220,.08);border:1px solid var(--line-strong)}
+  .bn-vram::before{background:var(--muted)}
+  .bn-cap{color:var(--rose);background:rgba(255,122,138,.1);border:1px solid rgba(255,122,138,.35)}
+  .bn-cap::before{background:var(--rose)}
+
+  /* live formula line */
+  .formula{font-family:var(--mono);font-size:12.5px;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin-top:14px;line-height:1.75;overflow-x:auto}
+  .formula .op{color:var(--cyan)}
+  .formula .lab{color:var(--muted-2)}
+  .formula b{color:var(--ink)}
+  .formula .hi{color:var(--cyan)}
+  .formula .no{color:var(--rose)}
+
+  /* hood table */
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:12px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--cyan)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part3">Part 3 · Beyond the Basics</a><span class="sep">/</span>
+    <span class="here">01 · GPU anatomy</span>
+  </nav>
+  <span class="eyebrow">Part 3 · Lesson 1/8</span>
+  <h1>What a <span class="cyan">GPU</span> actually is: memory, all the way down</h1>
+  <p class="lede">A GPU is a few hundred tiny processors bolted to a big, slow pool of memory — with two tiny-but-fast tiers wedged between them. This one picture is the physical stage every trick in Part 2 was playing on: the weights live far away in VRAM, and dragging them up is the whole cost.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~6 min</b></span>
+    <span class="meta-pill">🎚 <b>does it fit? computed live</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>A GPU is a few hundred tiny processors — <span class="strong-ink">SMs</span> (Streaming Multiprocessors, ~108 on an A100) — wired to a big, slow pool of memory: <span class="cyan">VRAM / HBM</span>, 80 GB at 2 TB/s. Between the SMs and that pool sit two tiny-but-fast tiers: <span class="strong-ink">on-chip SRAM</span> (~192 KB per SM) and <span class="strong-ink">registers</span>.</p>
+    <p>Everything the model <i>is</i> lives in VRAM: the frozen weights (<span class="rose">13.2 GB</span>), the KV cache (Part-2 lesson 3), the activations. The SMs can only compute on what's already been dragged up into SRAM and registers first.</p>
+    <p>Here's the wall. SRAM is ~<b class="cyan">10×</b> faster than VRAM but holds only <i>kilobytes</i>, so a decode step must stream all 13.2 GB of weights <i>up from VRAM</i> just to do a little math — <span class="cyan">VRAM bandwidth is the bottleneck</span>, exactly the "bandwidth-bound" of Part-2 lesson 1. Every move in Part 2, and FlashAttention next page, is a play against this hierarchy.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Place a thing in the hierarchy · does it fit? computed live</span></div>
+
+    <div class="chips" id="chips" role="group" aria-label="Pick a thing a model holds to place in the memory hierarchy">
+      <button class="chip wt on"  data-item="weights" aria-pressed="true">Model weights</button>
+      <button class="chip kv"     data-item="kv"      aria-pressed="false">KV cache</button>
+      <button class="chip sc"     data-item="score"   aria-pressed="false">Score matrix · 1 head</button>
+      <button class="chip fl"     data-item="flash"   aria-pressed="false">Flash tile · 64×64</button>
+    </div>
+
+    <div class="ctrls">
+      <div class="ctl" id="precCtl">
+        <div class="ctl-top">
+          <span class="ctl-lab">Weight precision &mdash; bytes per parameter</span>
+          <span class="ctl-val" id="precVal">fp16 · 2 B</span>
+        </div>
+        <div class="seg" id="prec" role="group" aria-label="Weight precision">
+          <button data-p="fp16" class="on" aria-pressed="true">fp16</button>
+          <button data-p="int4" aria-pressed="false">int4</button>
+        </div>
+      </div>
+      <div class="ctl" id="seqCtl">
+        <div class="ctl-top">
+          <span class="ctl-lab">Sequence length &mdash; sizes the KV cache &amp; score matrix</span>
+          <span class="ctl-val">seq = <b id="seqVal">4096</b></span>
+        </div>
+        <input type="range" id="seq" min="9" max="17" step="1" value="12"
+               aria-label="Sequence length, 512 to 131072 tokens, powers of two">
+      </div>
+    </div>
+
+    <!-- the three tiers, fast/tiny → slow/huge; the landing tier lights -->
+    <div class="tiers" id="tiers">
+      <div class="tier" data-tier="reg">
+        <div class="tn"><span>Registers</span></div>
+        <div class="tsub">~256 KB / SM · a few KB per thread</div>
+        <div class="tbw">instant</div>
+        <div class="flag">— lands here</div>
+      </div>
+      <div class="tier" data-tier="sram">
+        <div class="tn"><span>SRAM</span></div>
+        <div class="tsub">192 KB / SM · on-chip shared memory</div>
+        <div class="tbw">~19 TB/s</div>
+        <div class="flag">✓ lands here</div>
+      </div>
+      <div class="tier" data-tier="vram">
+        <div class="tn"><span>VRAM · HBM</span></div>
+        <div class="tsub">80 GB · where the model lives</div>
+        <div class="tbw">2.0 TB/s</div>
+        <div class="flag">— lands here</div>
+      </div>
+    </div>
+
+    <div class="plot-wrap">
+      <svg class="ruler-svg" id="ruler" viewBox="0 0 660 168" role="img"
+           aria-label="A log-scale size ruler from 1 KB to 100 GB, with the SRAM ceiling at 192 KiB and the VRAM ceiling at 80 GB marked. The selected item is drawn as a bar; its end marks its size and shows which tier it lands in."></svg>
+      <p class="caption" id="caption"></p>
+    </div>
+
+    <div class="reads">
+      <div class="read">
+        <div class="rlab">Item size</div>
+        <div class="rnum" id="sizeNum">13.2 GB</div>
+        <div class="rsub" id="sizeSub">model weights</div>
+      </div>
+      <div class="read tier-read">
+        <div class="rlab">Lands in / bandwidth</div>
+        <div class="rnum" id="tierNum"><span class="bneck bn-vram">VRAM</span></div>
+        <div class="rsub" id="tierSub">2.0 TB/s</div>
+      </div>
+      <div class="read">
+        <div class="rlab">vs on-chip SRAM</div>
+        <div class="rnum" id="slowNum">9.5×</div>
+        <div class="rsub" id="slowSub">slower to move</div>
+      </div>
+    </div>
+
+    <div class="formula" id="formula"></div>
+
+    <p class="stage-note"><span class="key cyan">TRY →</span> You start with the <b class="rose">13.2 GB weights</b> — they blow past the SRAM line and land in slow <span class="cyan">VRAM</span>. Now click <b class="violet">Flash tile · 64×64</b>: at <b>56 KiB</b> it drops <i>under</i> the 192 KiB line and lands on-chip (SRAM lights cyan). Then pick <b class="violet">Score matrix</b> and drag <b>seq</b> up — the bar grows from 512 KiB to tens of MiB, always deep in VRAM. Only the Flash tile ever fits on-chip; everything recomputes from <code class="inl" style="font-size:.82em">fits SRAM ⇔ bytes ≤ 192 KiB</code>.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p><b>The A100, tier by tier.</b> 108 SMs do the multiply-adds. Each SM has its own <code>192 KB</code> of SRAM (~19 TB/s) and a <code>256 KB</code> register file. All 80 GB of HBM VRAM sit off to the side at <code>2.0 TB/s</code> — huge, but ~<b>10×</b> slower to read than SRAM (<code>19 / 2.0 = 9.5×</code>). That gap is the whole story.</p>
+      <p><b>What each thing costs, and where it lands</b> (fp16, from the shared helpers):</p>
+      <div class="wrapx"><table>
+        <tr><th>item</th><th>formula</th><th>bytes</th><th>fits SRAM?</th><th>tier</th></tr>
+        <tr><td>weights fp16</td><td>paramCount × 2</td><td>13.2 GB</td><td>no</td><td>VRAM</td></tr>
+        <tr><td>KV cache · 4k</td><td>2·32·32·128·4096·2</td><td>2.15 GB</td><td>no</td><td>VRAM</td></tr>
+        <tr><td>score matrix · n=4096</td><td>4096² × 2</td><td>32 MiB</td><td>no</td><td>VRAM</td></tr>
+        <tr><td>Flash tile · 64×64</td><td>(3·64·128 + 64²)×2</td><td>56 KiB</td><td><b style="color:var(--green)">yes ✓</b></td><td>SRAM</td></tr>
+      </table></div>
+      <p><b>The 6.6 ms.</b> A batch-1 decode step reads all <code>13.2 GB</code> of weights up from VRAM to do ~13 GFLOP of math. At <code>2.0 TB/s</code> the fetch alone takes <code>13.2e9 / 2.0e12 ≈ 6.6 ms</code> — the exact number from Part-2 lesson 1. The math is trivial; the <i>fetch</i> is the cost. Only the 56 KiB Flash tile is small enough to sit on-chip while it's worked on — which is precisely the door FlashAttention walks through next page.</p>
+      <p>This is the roofline (Part-2 lesson 8) rendered in hardware: below the ridge point you're waiting on memory, and the memory you're waiting on is this VRAM, two tiers down from the SMs.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">A GPU is fast because it has lots of fast memory.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It has a <b style="color:var(--cyan)">little</b> fast memory (SRAM, kilobytes on-chip) and a <b>lot</b> of slow memory (VRAM, 80 GB at 2 TB/s). The art of fast inference is keeping the SMs fed across that gap — moving as few bytes as possible up the hierarchy.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>A GPU is a memory hierarchy: <b>registers → 192 KB SRAM → 80 GB VRAM</b>, fast-and-tiny to slow-and-huge. The SMs compute, but only on what's dragged up into SRAM first — and <b>VRAM bandwidth is the wall</b> that makes batch-1 decode bandwidth-bound. Only a sliver (a 56 KiB Flash tile) ever fits on-chip; the 13.2 GB of weights never do.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Why is a batch-1 decode step "bandwidth-bound"?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">The SMs are too slow to do the math.</button>
+      <button class="opt" data-correct="1">The weights live in slow VRAM and must be streamed up to the SMs each step — memory movement, not math, is the limit.</button>
+      <button class="opt" data-correct="0">The on-chip SRAM is too big to search quickly.</button>
+    </div>
+    <div class="why"><b>Why:</b> SRAM is tiny and fast, VRAM is huge and slow. A decode step drags every weight up from VRAM (~6.6 ms just to move 13.2 GB), so bandwidth — not the SMs' math — is the wall.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="index.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Back to the course map</div></a>
+  <a href="grouped-query-attention.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Shrink the KV cache: grouped-query attention</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course-data-p2.js"></script>
+<script src="course-data-p3.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   GPU anatomy — "does it fit?" hierarchy explorer, COMPUTED live.
+   Globals: MODEL, GPU, BYTES, weightBytes (p2); HIER, fitsInSram, fitsInVram,
+   kvCacheBytes, scoreMatrixBytes, flashTileBytes, paramCount (p2/p3).
+   Recompute, never replay: every chip / toggle / slider re-evaluates the
+   byte formula and re-decides which tier lights.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+  const $$ = (s,r)=> Array.from((r||document).querySelectorAll(s));
+  const NS = 'http://www.w3.org/2000/svg';
+
+  /* ---- byte formatter: decimal GB (3 sig figs) for big things, binary MiB/KiB below ---- */
+  function fmt(b){
+    if(b >= 1e9) return (b/1e9).toPrecision(3).replace(/\.?0+$/,'') + ' GB';
+    if(b >= 1048576){ const v = b/1048576; return (Math.round(v*10)/10) + ' MiB'; }
+    if(b >= 1024){ const v = b/1024; return (Math.round(v*10)/10) + ' KiB'; }
+    return b + ' B';
+  }
+  const commas = n => n.toLocaleString('en-US');
+
+  /* ---- the placeable items; each computes its bytes LIVE from the shared helpers ---- */
+  const items = {
+    weights:{ label:'model weights',      klass:'rose',   col:'var(--rose)',
+      bytes:()=> weightBytes(MODEL, BYTES[prec]),
+      formula:()=>`<span class="lab">weights</span> = paramCount <span class="op">×</span> bytes/param `+
+                  `= <b>${(paramCount()/1e9).toPrecision(3)}e9</b> <span class="op">×</span> <b>${prec==='int4'?'0.5':'2'}</b> `+
+                  `= <b class="hi">${fmt(weightBytes(MODEL,BYTES[prec]))}</b>` },
+    kv:{ label:'KV cache',                klass:'cyan',   col:'var(--cyan)',
+      bytes:()=> kvCacheBytes(MODEL, seq, 1, 2),
+      formula:()=>`<span class="lab">KV</span> = 2 <span class="op">·</span> layers <span class="op">·</span> heads <span class="op">·</span> dim <span class="op">·</span> seq <span class="op">·</span> 2 `+
+                  `= 2·32·32·128·<b>${commas(seq)}</b>·2 = <b class="hi">${fmt(kvCacheBytes(MODEL,seq,1,2))}</b>` },
+    score:{ label:'score matrix · 1 head', klass:'violet', col:'var(--violet)',
+      bytes:()=> scoreMatrixBytes(seq),
+      formula:()=>`<span class="lab">scores</span> = n² <span class="op">×</span> 2 = <b>${commas(seq)}</b>² <span class="op">×</span> 2 `+
+                  `= <b class="hi">${fmt(scoreMatrixBytes(seq))}</b>` },
+    flash:{ label:'Flash tile · 64×64',   klass:'violet', col:'var(--violet)',
+      bytes:()=> flashTileBytes(64),
+      formula:()=>`<span class="lab">tile</span> = (3 <span class="op">·</span> B <span class="op">·</span> d <span class="op">+</span> B²) <span class="op">×</span> 2 `+
+                  `= (3·64·128 + 64²)×2 = <b class="hi">${fmt(flashTileBytes(64))}</b>` }
+  };
+
+  /* ---- state ---- */
+  let sel = 'weights', prec = 'fp16', seq = 4096;
+
+  /* ---- log ruler geometry (bytes: 1 KB .. 100 GB) ---- */
+  const svg = $('#ruler');
+  const VBW=660, VBH=168, ML=20, MR=20;
+  const PW = VBW-ML-MR;
+  const LX0=3, LX1=11;                    // log10 bytes: 1e3 .. 1e11
+  const BAR_Y=54, BAR_H=26, TRK_Y=BAR_Y, AX_Y=118;
+  const xPix = b => ML + (Math.min(LX1,Math.max(LX0,Math.log10(b)))-LX0)/(LX1-LX0)*PW;
+
+  const mk = (tag,attrs,txt)=>{
+    const el=document.createElementNS(NS,tag);
+    for(const k in attrs) el.setAttribute(k,attrs[k]);
+    if(txt!=null) el.textContent=txt;
+    svg.appendChild(el); return el;
+  };
+
+  const SRAM_CEIL = HIER.sram_kb*1024;   // 196608
+  const VRAM_CEIL = HIER.vram_gb*1e9;    // 8e10
+  let itemFill, itemCap, itemLab;
+
+  function drawScaffold(){
+    const xS = xPix(SRAM_CEIL), xV = xPix(VRAM_CEIL), xL = xPix(1e3), xR = xPix(1e11);
+
+    // zone tints across the bar band
+    mk('rect',{class:'zone-sram', x:xL, y:BAR_Y-10, width:xS-xL, height:BAR_H+20});
+    mk('rect',{class:'zone-vram', x:xS,  y:BAR_Y-10, width:xV-xS, height:BAR_H+20});
+    mk('rect',{class:'zone-cap',  x:xV,  y:BAR_Y-10, width:xR-xV, height:BAR_H+20});
+
+    // zone labels
+    mk('text',{class:'zone-lab', x:(xL+xS)/2, y:BAR_Y-16, 'text-anchor':'middle', fill:'var(--cyan)'}, 'on-chip');
+    mk('text',{class:'zone-lab', x:(xS+xV)/2, y:BAR_Y-16, 'text-anchor':'middle', fill:'var(--muted)'}, 'VRAM (slow)');
+
+    // item track
+    mk('rect',{class:'track', x:xL, y:TRK_Y, width:xR-xL, height:BAR_H, rx:6});
+
+    // threshold lines
+    mk('line',{class:'thr sram', x1:xS, y1:BAR_Y-10, x2:xS, y2:AX_Y});
+    mk('text',{class:'thr-lab sram', x:xS, y:AX_Y+15, 'text-anchor':'middle'}, 'SRAM 192 KiB');
+    mk('line',{class:'thr vram', x1:xV, y1:BAR_Y-10, x2:xV, y2:AX_Y});
+    mk('text',{class:'thr-lab vram', x:xV, y:AX_Y+15, 'text-anchor':'end'}, 'VRAM 80 GB');
+
+    // axis + decade ticks
+    mk('line',{class:'axis', x1:ML, y1:AX_Y, x2:ML+PW, y2:AX_Y});
+    [[1e3,'1 KB'],[1e6,'1 MB'],[1e9,'1 GB'],[1e11,'100 GB']].forEach(([v,t])=>{
+      const x=xPix(v);
+      mk('line',{class:'grid', x1:x, y1:BAR_Y-10, x2:x, y2:AX_Y});
+      mk('text',{class:'tick', x:x, y:AX_Y+15, 'text-anchor': v===1e11?'end':(v===1e3?'start':'middle')}, t);
+    });
+
+    // dynamic item layer (on top)
+    itemFill = mk('rect',{class:'item-fill', x:xL, y:BAR_Y, height:BAR_H, rx:6});
+    itemCap  = mk('circle',{class:'item-cap', r:6, cy:BAR_Y+BAR_H/2});
+    itemLab  = mk('text',{class:'item-lab', y:BAR_Y-16});
+  }
+
+  /* ---- recompute + repaint everything ---- */
+  function update(){
+    const it = items[sel];
+    const b  = it.bytes();
+    const sram = fitsInSram(b);
+    const vram = fitsInVram(b);
+    const tier = sram ? 'sram' : (vram ? 'vram' : 'cap');
+
+    // ---- ruler bar ----
+    const xL = xPix(1e3), xEnd = xPix(b);
+    itemFill.setAttribute('x', xL);
+    itemFill.setAttribute('width', Math.max(2, xEnd-xL));
+    itemFill.setAttribute('fill', it.col);
+    itemFill.setAttribute('fill-opacity', tier==='cap' ? '0.30' : '0.22');
+    itemFill.setAttribute('stroke', it.col);
+    itemFill.setAttribute('stroke-width', '1.5');
+    itemCap.setAttribute('cx', xEnd);
+    itemCap.setAttribute('fill', it.col);
+    const near = xEnd > ML+PW-90;
+    itemLab.setAttribute('x', near ? xEnd-10 : xEnd+10);
+    itemLab.setAttribute('text-anchor', near ? 'end' : 'start');
+    itemLab.setAttribute('fill', it.col);
+    itemLab.textContent = fmt(b);
+
+    // ---- tier pills ----
+    $$('#tiers .tier').forEach(t=>{
+      const on = t.dataset.tier === (tier==='cap'?'vram':tier);
+      t.classList.toggle('lit', on);
+      t.classList.toggle('cap', tier==='cap');
+    });
+
+    // ---- reads ----
+    $('#sizeNum').textContent = fmt(b);
+    $('#sizeSub').textContent = it.label;
+
+    const bw = sram ? HIER.sram_bw_tbs : HIER.vram_bw_tbs;      // 19 or 2.0 TB/s
+    $('#tierNum').innerHTML = tier==='sram'
+        ? '<span class="bneck bn-sram">SRAM · on-chip ✓</span>'
+        : tier==='vram'
+          ? '<span class="bneck bn-vram">VRAM · HBM</span>'
+          : '<span class="bneck bn-cap">won’t fit 80 GB</span>';
+    $('#tierSub').textContent = tier==='cap' ? 'exceeds VRAM capacity' : bw.toFixed(1)+' TB/s';
+
+    const slow = HIER.sram_bw_tbs / HIER.vram_bw_tbs;           // 9.5
+    $('#slowNum').textContent = sram ? '1×' : (Math.round(slow*10)/10)+'×';
+    $('#slowNum').style.color = sram ? 'var(--cyan)' : 'var(--muted)';
+    $('#slowSub').textContent = sram ? 'fastest tier' : 'slower to move';
+
+    // ---- caption (dynamic subject + fixed contrast) ----
+    $('#caption').innerHTML = tier==='sram'
+      ? `The <b>${fmt(b)}</b> ${it.label} slips under the 192 KiB line — it lives <b>on-chip in SRAM</b>. The 32 MiB score matrix and 13.2 GB weights do not; they sit in slow VRAM.`
+      : `The <b>${fmt(b)}</b> ${it.label} is far past the SRAM line — it lives in <b>slow VRAM</b>, ~10× slower to reach than on-chip. Only the 56 KiB Flash tile fits SRAM.`;
+
+    // ---- live formula ----
+    const cmp = SRAM_CEIL;
+    const fits = b <= cmp;
+    $('#formula').innerHTML =
+      it.formula() + '<br>' +
+      `<span class="lab">fits SRAM</span> ⇔ bytes ≤ 192 KiB (${commas(cmp)} B) → ` +
+      `<b>${commas(b)}</b> ${fits?'≤':'>'} ${commas(cmp)} → ` +
+      (fits ? '<b class="hi">fits on-chip → SRAM</b>'
+            : `<b class="no">does not fit → ${vram?'VRAM':'over capacity'}</b>`);
+  }
+
+  /* ---- controls ---- */
+  $('#chips').addEventListener('click', e=>{
+    const b = e.target.closest('.chip'); if(!b) return;
+    sel = b.dataset.item;
+    $$('#chips .chip').forEach(c=>{
+      const on = c===b;
+      c.classList.toggle('on', on);
+      c.setAttribute('aria-pressed', on?'true':'false');
+    });
+    // dim the control that doesn't affect this item
+    $('#precCtl').classList.toggle('dim', sel!=='weights');
+    $('#seqCtl').classList.toggle('dim', !(sel==='kv'||sel==='score'));
+    update();
+  });
+
+  $('#prec').addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b) return;
+    prec = b.dataset.p;
+    $$('#prec button').forEach(x=>{
+      const on = x===b;
+      x.classList.toggle('on', on);
+      x.setAttribute('aria-pressed', on?'true':'false');
+    });
+    $('#precVal').textContent = prec+' · '+(prec==='int4'?'0.5':'2')+' B';
+    update();
+  });
+
+  const seqEl = $('#seq');
+  seqEl.addEventListener('input', ()=>{
+    seq = Math.pow(2, +seqEl.value);
+    $('#seqVal').textContent = commas(seq);
+    update();
+  });
+
+  /* ---- init ---- */
+  $('#precCtl').classList.toggle('dim', sel!=='weights');
+  $('#seqCtl').classList.toggle('dim', !(sel==='kv'||sel==='score'));
+  drawScaffold();
+  update();
+})();
+</script>
+</body>
+</html>
