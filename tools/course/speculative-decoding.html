@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Speculative decoding — LLM Visual Course</title>
+<meta name="description" content="A small draft model proposes k tokens; the big target verifies them all in one parallel pass and keeps the run it agrees with — expected tokens per pass and net speedup, computed live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS (ported from the monolith spec-decode widget) ---- */
+
+  /* segmented controls + toggle (throughput = green) */
+  .seg{font-family:var(--mono);font-size:12.5px;padding:8px 14px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s}
+  .seg:hover{border-color:var(--line-strong);color:var(--ink)}
+  .seg.active{background:var(--green);color:#06210f;border-color:var(--green)}
+  .seg:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .segrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .toggle{display:flex;gap:8px;flex-wrap:wrap;margin:0}
+  .ctl-lab{font-family:var(--mono);font-size:11px;letter-spacing:.05em;color:var(--muted-2);text-transform:uppercase}
+
+  /* bottleneck badge */
+  .bneck{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px;border:1px solid;white-space:nowrap}
+  .bn-band{color:var(--cyan);border-color:rgba(67,214,200,.5);background:rgba(67,214,200,.1)}
+
+  /* draft / target towers */
+  .spec-top{display:grid;grid-template-columns:140px 1fr;gap:24px;align-items:center;margin-bottom:10px}
+  @media(max-width:640px){.spec-top{grid-template-columns:1fr}}
+  .towers{display:flex;gap:18px;justify-content:center}
+  .tower{display:flex;flex-direction:column-reverse;gap:3px;align-items:center}
+  .tslab{width:52px;height:8px;border-radius:3px;border:1px solid var(--line)}
+  .tower.draft .tslab{background:linear-gradient(90deg,rgba(255,180,84,.5),rgba(110,231,135,.5))}
+  .tower.target .tslab{background:linear-gradient(90deg,rgba(255,122,138,.5),rgba(255,180,84,.5))}
+  .tower .tlab{font-family:var(--mono);font-size:9.5px;color:var(--muted-2);margin-top:6px;text-align:center;line-height:1.3}
+
+  /* controls column */
+  .ctl-col{display:flex;flex-direction:column;gap:14px}
+  .slide-row{display:flex;flex-direction:column;gap:6px}
+  .slide-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+  .slide-head .val{font-family:var(--mono);font-size:1.05rem;color:var(--green)}
+
+  /* token chips */
+  .spec-line{display:flex;gap:7px;flex-wrap:wrap;min-height:40px;align-items:center;margin:6px 0}
+  .tok{font-family:var(--mono);font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--line-strong);background:rgba(24,36,68,.7);color:var(--muted);white-space:nowrap;transition:.25s}
+  .tok.draft{border-color:var(--amber);color:var(--amber)}
+  .tok.accepted{border-color:var(--green);color:#06210f;background:var(--green)}
+  .tok.rejected{border-color:var(--rose);color:var(--rose);opacity:.6;text-decoration:line-through}
+  .tok.filled{border-color:var(--violet);color:#0d0a1e;background:var(--violet)}
+
+  /* committed sentence */
+  .spec-out{font-family:var(--mono);font-size:.98rem;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin-top:16px;min-height:50px;line-height:1.9}
+  .spec-out .lead{color:var(--muted-2)}
+
+  /* readouts */
+  .reads{display:flex;gap:30px;flex-wrap:wrap;margin-top:18px}
+  .read .k{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-2)}
+  .read .v{font-family:var(--mono);font-size:1.7rem;color:var(--ink);line-height:1.1;margin-top:2px}
+  .read .v small{font-size:.42em;color:var(--muted-2)}
+  .read .v.good{color:var(--green)} .read .v.rose{color:var(--rose)} .read .v.am{color:var(--amber)}
+
+  .reads-model{display:flex;gap:30px;flex-wrap:wrap;margin-top:6px;padding-top:18px;border-top:1px solid var(--line)}
+  .model-formula{font-family:var(--mono);font-size:.82rem;color:var(--muted);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:12px 15px;margin-top:16px;line-height:1.9;overflow-x:auto}
+  .model-formula b{color:var(--green)}
+  .model-formula .op{color:var(--muted-2)}
+
+  /* race bars */
+  .race{margin-top:22px;display:flex;flex-direction:column;gap:12px}
+  .race .lane{position:relative}
+  .race .lane .rl{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-bottom:5px}
+  .race .track{height:16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .race .track .f{height:100%;width:0;transition:width .4s linear}
+  .race .plain .f{background:linear-gradient(90deg,#5a4fd6,var(--violet))}
+  .race .spec .f{background:linear-gradient(90deg,var(--amber-deep),var(--green))}
+
+  .hood table{border-collapse:collapse;width:100%;margin:10px 0;font-family:var(--mono);font-size:.86rem}
+  .hood th,.hood td{border:1px solid var(--line);padding:7px 10px;text-align:right;color:var(--muted)}
+  .hood th{color:var(--muted-2);letter-spacing:.04em;font-weight:500;text-align:right}
+  .hood td:first-child,.hood th:first-child{text-align:left}
+  .hood td b{color:var(--green)}
+  .hood .tbl-wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part2">Part 2 · How LLMs Run Fast</a><span class="sep">/</span>
+    <span class="here">07 · Speculative decoding</span>
+  </nav>
+  <span class="eyebrow">Part 2 · Lesson 7/8</span>
+  <h1><span class="green">Speculative</span> decoding: guess ahead, verify in one pass</h1>
+  <p class="lede">A small, fast draft model proposes the next few tokens; the big target model verifies them all in a single parallel pass — several tokens for the price of one expensive step, with output identical to plain decoding.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~6 min</b></span>
+    <span class="meta-pill">🎚 <b>tokens/pass + speedup</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Decode's expensive step reads the <span class="strong-ink">whole model</span> just to make <em>one</em> token — wasteful. So a small fast <span class="amber">draft</span> model proposes the next <em>k</em> tokens cheaply, guessing where the big model is probably going.</p>
+    <p>The big <span class="rose">target</span> model then checks all <em>k</em> <span class="strong-ink">in a single parallel pass</span> — the same parallelism as prefill, so verifying k tokens costs about one normal decode step. It keeps the longest prefix it agrees with and <span class="strong-ink">rejects from the first disagreement</span>, always emitting one correct token at the break.</p>
+    <p>When the draft is right you get several tokens per expensive step — and the text is <span class="green">exactly</span> what the target would have written alone. Higher acceptance rate = more free tokens.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label">
+      <span>Draft → verify → accept / reject</span>
+      <span style="display:inline-flex;gap:10px;align-items:center">
+        <span class="bneck bn-band">bandwidth-bound</span>
+        <button class="btn play" id="replay"><span class="ico"></span>Run</button>
+      </span>
+    </div>
+
+    <div class="spec-top">
+      <div class="towers">
+        <div class="tower draft" id="towerDraft"></div>
+        <div class="tower target" id="towerTarget"></div>
+      </div>
+      <div class="ctl-col">
+        <div class="segrow">
+          <span class="ctl-lab">draft length k:</span>
+          <button class="seg" data-k="2">2</button>
+          <button class="seg active" data-k="4">4</button>
+          <button class="seg" data-k="6">6</button>
+        </div>
+        <div class="toggle" id="draftQ" role="group" aria-label="draft quality">
+          <button class="seg active" data-q="good">aligned draft</button>
+          <button class="seg" data-q="weak">weak draft</button>
+        </div>
+        <div class="slide-row">
+          <div class="slide-head">
+            <label class="ctl-lab" for="aSlider">acceptance rate a</label>
+            <span class="val" id="aVal">0.80</span>
+          </div>
+          <input type="range" id="aSlider" min="30" max="95" step="5" value="80">
+          <span class="ctl-lab" style="text-transform:none">draft cost c = 0.10 (draft size ÷ target size)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec-line" id="specLine"></div>
+    <div class="spec-out"><span class="lead">The quick brown fox jumps over the lazy </span><span id="specOut" style="color:var(--green)"></span></div>
+
+    <!-- animation readouts (empirical, from the accept-run) -->
+    <div class="reads">
+      <div class="read"><div class="k">tokens committed</div><div class="v good" id="specCommitted">0</div></div>
+      <div class="read"><div class="k">expensive steps</div><div class="v rose" id="specSteps">0</div></div>
+      <div class="read"><div class="k">tokens / step (this run)</div><div class="v am" id="specRate">0.0<small>×</small></div></div>
+    </div>
+
+    <!-- model readouts (computed live from the helpers — recompute, not replay) -->
+    <div class="reads-model">
+      <div class="read"><div class="k">E[tokens] / verify pass</div><div class="v good" id="specE">0.00</div></div>
+      <div class="read"><div class="k">net speedup vs plain decode</div><div class="v good" id="specSpeedup">0.00<small>×</small></div></div>
+    </div>
+    <div class="model-formula">
+      E<span class="op"> = </span>(1 − a<sup>k+1</sup>) / (1 − a)<span class="op">  →  </span><span id="formulaE"></span><br>
+      speedup<span class="op"> = </span>E / (1 + k·c)<span class="op">  →  </span><span id="formulaSp"></span>
+    </div>
+
+    <!-- race bars -->
+    <div class="race">
+      <div class="lane"><div class="rl">plain decode — 1 token per expensive step</div><div class="track plain"><div class="f" id="racePlain"></div></div></div>
+      <div class="lane"><div class="rl">speculative — several per step (when the draft agrees)</div><div class="track spec"><div class="f" id="raceSpec"></div></div></div>
+    </div>
+
+    <p class="stage-note"><span class="key green">TRY →</span> Drag <b>acceptance rate a</b> and watch <b>E</b> and <b>net speedup</b> recompute from the formula (no replay). Switch <b>draft length k</b> or flip <b>aligned ⟷ weak draft</b> to re-run the accept/reject animation — the aligned toggle sets a high a so the animation and the numbers agree.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>Expected tokens per verify pass, drafting <code>k</code> tokens with independent per-token acceptance probability <code>a</code>:
+      <code>E = (1 − a^(k+1)) / (1 − a)</code>. Net speedup folds in the draft's own cost — the draft runs the small model <code>k</code> times per pass, at cost fraction <code>c = 0.1</code> of a target step each: <code>speedup = E / (1 + k·c)</code>.</p>
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>a, k</th><th>a^(k+1)</th><th>E (tokens/pass)</th><th>net speedup</th></tr></thead>
+        <tbody>
+          <tr><td>a = 0.8, k = 4</td><td>0.328</td><td><b>3.36</b></td><td><b>2.40×</b></td></tr>
+          <tr><td>a = 0.9, k = 4</td><td>0.590</td><td>4.10</td><td>2.93×</td></tr>
+          <tr><td>a = 0.5, k = 4</td><td>0.031</td><td>1.94</td><td>1.38×</td></tr>
+          <tr><td>a = 0.8, k = 2</td><td>0.512</td><td>2.44</td><td>2.03×</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p>At the default <code>a = 0.8, k = 4</code>: <code>(1 − 0.8⁵) / 0.2 = 0.6723 / 0.2 = 3.36</code> tokens per verify pass, and <code>3.36 / (1 + 4·0.1) = 3.36 / 1.4 = 2.40×</code> net.</p>
+      <p>Why the target pass is cheap: verifying <code>k</code> proposed tokens is one parallel forward pass over <code>k</code> positions — the <em>same</em> parallelism as prefill (lesson 1), so it costs about one decode step, not <code>k</code> of them. Longer <code>k</code> helps only while acceptance stays high — a wrong early guess wastes the whole tail after it. And the <span class="green">output is identical to plain decoding</span>: every committed token is target-verified, and rejected drafts are discarded, so the text is exactly what the target alone would have produced.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The small draft model's mistakes leak into the answer.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Every token is verified by the target; rejects are thrown away. The text is exactly what the target alone would have written — this is speed, not a quality change.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>A cheap draft proposes <b>k</b> tokens; the target verifies them all in <b>one parallel pass</b> and keeps the run it agrees with. You get more tokens per expensive step — <b>identical output, higher acceptance = more speed</b>.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">How can speculative decoding be faster yet produce identical output?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">It averages the draft and target models' predictions.</button>
+      <button class="opt" data-correct="1">The draft proposes several tokens; the target verifies them in one parallel pass and keeps only the ones it agrees with.</button>
+      <button class="opt" data-correct="0">It lowers the sampling temperature so generation settles faster.</button>
+    </div>
+    <div class="why"><b>Why:</b> verification is a single parallel target pass, and accepted tokens are exactly what the target would have produced — so speed rises with the acceptance rate while the output never changes.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="continuous-batching.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Read the weights once, serve many</div></a>
+  <a href="roofline.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">The roofline: moving weights, not math</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course-data-p2.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* ===== speculative decoding — ported accept-run animation + live acceptance-rate model ===== */
+(function(){
+  "use strict";
+  const $  = (s,r)=> (r||document).querySelector(s);
+  const $$ = (s,r)=> Array.from((r||document).querySelectorAll(s));
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* --- the running example: what the target would write, and where the draft matches --- */
+  const target    = ['dog','.','She','was','a','clever','fox',',','quick','and','quiet','.','∎'];
+  const matchGood = [1,1,1,0, 1,1,1,1, 1,1,0,1, 1];      // aligned draft: mostly agrees
+  const matchWeak = [1,0,1,0, 1,0,0,1, 0,1,0,1, 1];      // weak draft: frequent misses
+  const wrongWords= ['cat','!','He','were','the','lazy','dog','…','slow','or','loud','?','·'];
+
+  const specLine   = $('#specLine'), specOut = $('#specOut');
+  const towerDraft = $('#towerDraft'), towerTarget = $('#towerTarget');
+  const aSlider = $('#aSlider');
+  const A_PRESET = { good: 80, weak: 50 };   // aligned/weak toggle drives the a slider
+
+  let specK = 4, specQ = 'good', specTimers = [];
+
+  function buildTowers(){
+    towerDraft.innerHTML = ''; towerTarget.innerHTML = '';
+    for(let i=0;i<3;i++){ const s=document.createElement('div'); s.className='tslab'; towerDraft.appendChild(s); }
+    for(let i=0;i<8;i++){ const s=document.createElement('div'); s.className='tslab'; towerTarget.appendChild(s); }
+    towerDraft.insertAdjacentHTML('beforeend','<div class="tlab">draft<br>small · fast</div>');
+    towerTarget.insertAdjacentHTML('beforeend','<div class="tlab">target<br>big · slow</div>');
+  }
+
+  /* ---- the live acceptance-rate MODEL: recompute E + speedup from the shared helpers ----
+     Driven by the a slider and k. RECOMPUTE, never replay: moving the slider never touches
+     the animation, only re-evaluates the formula. ------------------------------------------ */
+  const C = 0.1;   // draft cost fraction (draft size ÷ target size)
+  function updateModel(){
+    const a = (+aSlider.value)/100;
+    const k = specK;
+    const E  = specExpectedTokens(a, k);
+    const sp = specSpeedup(a, k, C);
+    $('#aVal').textContent = a.toFixed(2);
+    $('#specE').textContent = E.toFixed(2);
+    $('#specSpeedup').innerHTML = sp.toFixed(2) + '<small>×</small>';
+    $('#formulaE').innerHTML  = '(1 − ' + a.toFixed(2) + '<sup>' + (k+1) + '</sup>) / (1 − ' + a.toFixed(2) + ') = <b>' + E.toFixed(2) + '</b>';
+    $('#formulaSp').innerHTML = E.toFixed(2) + ' / (1 + ' + k + '·' + C.toFixed(1) + ') = <b>' + sp.toFixed(2) + '×</b>';
+  }
+
+  /* ---- the ANIMATION: accept consecutive matches, reject at first miss, always commit one
+     target token at the break (or a bonus token when the whole draft is accepted). ---------- */
+  function runSpec(){
+    specTimers.forEach(clearTimeout); specTimers = [];
+    specLine.innerHTML = ''; specOut.textContent = '';
+    const match = specQ === 'good' ? matchGood : matchWeak;
+    let pos = 0, committed = 0, steps = 0; const out = [];
+    $('#specCommitted').textContent = '0';
+    $('#specSteps').textContent = '0';
+    $('#specRate').innerHTML = '0.0<small>×</small>';
+    $('#racePlain').style.width = '0';
+    $('#raceSpec').style.width = '0';
+    const total = target.length;
+    const chip = (txt,cls)=>{ const s=document.createElement('span'); s.className='tok '+cls; s.textContent=txt; return s; };
+
+    const commitReadout = (committed, steps, out)=>{
+      specOut.textContent = out.join(' ').replace(/ ([.,])/g,'$1');
+      $('#specCommitted').textContent = committed;
+      $('#specSteps').textContent = steps;
+      $('#specRate').innerHTML = (committed/steps).toFixed(1) + '<small>×</small>';
+      $('#racePlain').style.width = Math.min(100, steps/total*100) + '%';
+      $('#raceSpec').style.width  = Math.min(100, committed/total*100) + '%';
+    };
+
+    /* reduced motion / instant path: compute the final state without timers */
+    if(reduce){
+      let p=0,c=0,st=0; const o=[];
+      while(p<total){
+        st++;
+        const k = Math.min(specK, total-p);
+        let acc=0; for(let j=0;j<k;j++){ if(match[p+j]===1) acc++; else break; }
+        const gained = (acc===k) ? acc + ((p+k<total)?1:0) : acc+1;
+        for(let j=0;j<gained;j++) o.push(target[p+j]);
+        c+=gained; p+=gained;
+      }
+      commitReadout(c, st, o);
+      $('#raceSpec').style.width = '100%';
+      return;
+    }
+
+    const doStep = ()=>{
+      if(pos>=total){ $('#racePlain').style.width = Math.min(100, steps/total*100)+'%'; return; }
+      steps++;
+      specLine.innerHTML = '';
+      const k = Math.min(specK, total-pos);
+      /* draft proposes k tokens */
+      const proposed = [];
+      for(let j=0;j<k;j++){ const gi=pos+j; proposed.push(match[gi]===1 ? target[gi] : wrongWords[gi%wrongWords.length]); }
+      /* accepted run = leading consecutive matches */
+      let acc=0; for(let j=0;j<k;j++){ if(match[pos+j]===1) acc++; else break; }
+      const allMatch = acc===k;
+      proposed.forEach(w=> specLine.appendChild(chip(w,'draft')));
+      /* reveal the verify verdict after a beat */
+      specTimers.push(setTimeout(()=>{
+        $$('.tok', specLine).forEach((c,j)=>{
+          if(j<acc)        c.className='tok accepted';
+          else if(j===acc) c.className='tok rejected';
+          else             c.style.opacity='.25';
+        });
+        /* always commit one target token at the break; bonus token when all k accepted */
+        let gained = acc, addFilled = null;
+        if(!allMatch){ addFilled = target[pos+acc]; gained = acc+1; }
+        else { addFilled = (pos+k<total) ? target[pos+k] : null; gained = acc + (addFilled?1:0); }
+        specTimers.push(setTimeout(()=>{
+          if(addFilled) specLine.appendChild(chip(addFilled,'filled'));
+          for(let j=0;j<gained;j++) out.push(target[pos+j]);
+          committed += gained; pos += gained;
+          commitReadout(committed, steps, out);
+          specTimers.push(setTimeout(doStep, 520));
+        }, 360));
+      }, 120*k+220));
+    };
+    doStep();
+  }
+
+  /* ---- wiring ---- */
+  $('#replay').addEventListener('click', runSpec);
+
+  $$('[data-k]').forEach(b=> b.addEventListener('click', ()=>{
+    specK = +b.dataset.k;
+    $$('[data-k]').forEach(x=> x.classList.toggle('active', x===b));
+    updateModel();   // recompute E + speedup for the new k
+    runSpec();       // re-run the accept-run animation
+  }));
+
+  $$('#draftQ .seg').forEach(b=> b.addEventListener('click', ()=>{
+    specQ = b.dataset.q;
+    $$('#draftQ .seg').forEach(x=> x.classList.toggle('active', x===b));
+    aSlider.value = A_PRESET[specQ];   // set a to a high/low preset so animation + number agree
+    updateModel();
+    runSpec();
+  }));
+
+  aSlider.addEventListener('input', updateModel);   // slider drives the MODEL only — no replay
+
+  /* ---- init ---- */
+  buildTowers();
+  updateModel();
+  runSpec();
+})();
+</script>
+</body>
+</html>
