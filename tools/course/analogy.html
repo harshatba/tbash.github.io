@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analogy Calculator — LLM Visual Course</title>
+<meta name="description" content="Compute A − B + C on real word vectors and watch the nearest word fall out — king − man + woman ≈ queen, proven not asserted.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+  .calc{display:flex;flex-direction:column;gap:24px;width:100%}
+
+  /* --- the A − B + C control row --- */
+  .eq{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:12px 14px}
+  .term{display:flex;flex-direction:column;gap:6px;align-items:center}
+  .term .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-2)}
+  .term select{
+    font-family:var(--mono);font-size:1rem;color:var(--cyan);
+    background:var(--panel-2);border:1px solid var(--line-strong);border-radius:9px;
+    padding:9px 12px;min-width:112px;text-align:center;cursor:pointer;transition:.18s;
+    -webkit-appearance:none;appearance:none;
+  }
+  .term select:hover{border-color:var(--cyan)}
+  .term select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .op{font-family:var(--disp);font-size:1.7rem;color:var(--muted);padding-bottom:6px;line-height:1}
+
+  /* --- presets --- */
+  .presets{display:flex;flex-direction:column;gap:9px}
+  .presets .plabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-2);text-align:center}
+  .preset-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .preset{
+    font-family:var(--mono);font-size:12px;color:var(--muted);
+    background:var(--bg-2);border:1px solid var(--line);border-radius:20px;
+    padding:6px 13px;cursor:pointer;transition:.18s;white-space:nowrap;
+  }
+  .preset:hover{border-color:var(--cyan);color:var(--cyan)}
+  .preset:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .preset.active{border-color:var(--cyan);color:var(--cyan);background:rgba(67,214,200,.09)}
+
+  /* --- arithmetic readout --- */
+  .arith{
+    border:1px solid var(--line);border-radius:12px;background:rgba(11,16,32,.5);
+    padding:18px 20px;overflow-x:auto;
+  }
+  .arith-line{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;justify-content:center;font-family:var(--mono);font-size:.98rem}
+  .arith-line + .arith-line{margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+  .vchip{display:inline-flex;flex-direction:column;align-items:center;gap:3px}
+  .vchip .vw{font-size:11px;color:var(--muted-2);letter-spacing:.02em}
+  .vchip .vn{color:var(--cyan)}
+  .arith .sym{color:var(--muted);font-size:1.15rem}
+  .arith .res .vn{color:var(--ink);font-weight:600}
+  .arith .res .vw{color:var(--muted)}
+  .dimkey{font-family:var(--mono);font-size:11px;color:var(--muted-2);text-align:center;margin-top:12px}
+  .dimkey b{color:var(--muted);font-weight:500}
+
+  /* --- winner --- */
+  .winner{text-align:center;padding:6px 0 2px}
+  .winner .approx{font-family:var(--disp);font-size:1.5rem;color:var(--muted);vertical-align:middle}
+  .winner .word{font-family:var(--disp);font-weight:700;font-size:clamp(2.4rem,8vw,3.6rem);color:var(--cyan);letter-spacing:-.02em;line-height:1;vertical-align:middle}
+  .winner .cos{display:block;font-family:var(--mono);font-size:.9rem;color:var(--muted);margin-top:10px}
+  .winner .cos b{color:var(--ink);font-weight:600}
+  .winner.exact .word{text-shadow:0 0 26px rgba(67,214,200,.35)}
+  .winner .exact-badge{display:inline-block;margin-top:9px;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--green);border:1px solid rgba(110,231,135,.35);background:rgba(110,231,135,.08);border-radius:20px;padding:3px 10px}
+
+  /* --- ranked runners-up --- */
+  .ranks{display:flex;flex-direction:column;gap:8px}
+  .ranks .rhead{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted-2);text-align:center;margin-bottom:2px}
+  .rank{display:grid;grid-template-columns:84px 1fr 62px;align-items:center;gap:12px}
+  .rank .rw{font-family:var(--mono);font-size:.95rem;color:var(--ink);text-align:right}
+  .rank .rbar{height:12px;border-radius:6px;background:var(--bg-2);border:1px solid var(--line);overflow:hidden}
+  .rank .rfill{height:100%;background:linear-gradient(90deg,rgba(67,214,200,.55),var(--cyan));border-radius:6px;transition:width .35s ease}
+  .rank .rcos{font-family:var(--mono);font-size:.9rem;color:var(--muted);text-align:right}
+  .rank.top .rw{color:var(--cyan);font-weight:600}
+  @media (prefers-reduced-motion: reduce){.rank .rfill{transition:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">03 · Directions in meaning-space</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 3/7</span>
+  <h1>Meaning has <span class="cyan">directions</span> you can do arithmetic with</h1>
+  <p class="lede">If a word is a vector, then the <em>difference</em> between two words is a direction — and you can add and subtract those directions to travel across meaning.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Last page you saw that <span class="cyan">nearby vectors mean similar things</span>. Here's the surprising part: the <span class="strong-ink">difference</span> between two vectors is itself meaningful. The arrow from <span class="mono">king</span> to <span class="mono">man</span> points the same way as the arrow from <span class="mono">queen</span> to <span class="mono">woman</span> — it's the "royal → commoner" direction.</p>
+    <p>So you can do arithmetic on meaning. <span class="mono">king − man</span> strips away "royalness" leaving the male→neutral leftover; <span class="mono">+ woman</span> then swings it female — and you land on <span class="cyan">queen</span>. Nothing below is looked up as an answer: the widget does the subtraction, then <span class="strong-ink">searches every word for the nearest one</span>.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Poke it · the analogy calculator</span><button class="btn play" id="replay"><span class="ico"></span>Reset</button></div>
+    <div class="calc" id="calc">
+      <!-- A − B + C control row -->
+      <div class="eq" id="eq">
+        <div class="term">
+          <span class="tag">A</span>
+          <select id="selA" aria-label="Word A (start)"></select>
+        </div>
+        <span class="op">−</span>
+        <div class="term">
+          <span class="tag">B</span>
+          <select id="selB" aria-label="Word B (subtract)"></select>
+        </div>
+        <span class="op">+</span>
+        <div class="term">
+          <span class="tag">C</span>
+          <select id="selC" aria-label="Word C (add)"></select>
+        </div>
+      </div>
+
+      <!-- presets -->
+      <div class="presets">
+        <span class="plabel">Or try a known-good analogy</span>
+        <div class="preset-row" id="presets"></div>
+      </div>
+
+      <!-- arithmetic spelled out -->
+      <div class="arith" id="arith" aria-live="polite"></div>
+
+      <!-- winner -->
+      <div class="winner" id="winner"></div>
+
+      <!-- ranked list -->
+      <div class="ranks">
+        <div class="rhead">Nearest words to the result (A, B, C excluded)</div>
+        <div id="ranks"></div>
+      </div>
+    </div>
+    <p class="stage-note"><span class="key cyan">TRY →</span> Leave it on <span class="mono">king − man + woman</span> and read the big word: <span class="mono">queen</span>, cos = 1.00. Now change any dropdown, or tap a preset — every result is the arithmetic in the box run through a nearest-word search, computed on the spot. There is no lookup table of answers.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>Each word is a 3-number vector: <code>[gender, royalty, age]</code>, where gender is <code>−1</code> male / <code>+1</code> female, royalty is <code>1</code> for royals, and age is <code>1</code> for the young. The whole calculation is three subtractions and additions, done slot by slot.</p>
+      <p><b class="cyan">king − man + woman</b>, worked one dimension at a time:</p>
+      <p>
+        gender: <code>−1 − (−1) + 1 = 1</code><br>
+        royalty: <code>1 − 0 + 0 = 1</code><br>
+        age: <code>0 − 0 + 0 = 0</code>
+      </p>
+      <p>Result <code>[1, 1, 0]</code> — that is <b class="cyan">queen</b> exactly (female, royal, adult), so the cosine is <code>1.00</code>. Subtracting <code>man</code> and adding <code>woman</code> flipped only the gender slot; the royalty slot never moved, so we stayed royal and just changed sex.</p>
+      <p><b class="cyan">prince − boy + girl</b>, the same way:</p>
+      <p>
+        gender: <code>−1 − (−1) + 1 = 1</code><br>
+        royalty: <code>1 − 0 + 0 = 1</code><br>
+        age: <code>1 − 1 + 1 = 1</code>
+      </p>
+      <p>Result <code>[1, 1, 1]</code> = <b class="cyan">princess</b> (female, royal, young). Same male→female move, but this time the "young" slot rode along untouched.</p>
+      <p>The widget then measures cosine similarity from the result to all eight words and keeps the largest — excluding A, B and C so the answer can't just be one of the inputs. Because our little vocabulary is built on clean axes, the intended analogies land <em>exactly</em> on a real word (cos <code>1.00</code>); an off-target combo still returns the honest nearest word, just with a lower score.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt"><span class="mono">king − man + woman = queen</span> is a cute coincidence someone hard-coded into a demo.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It's real vector subtraction landing next to a real word. The widget recomputes the arithmetic and searches for the nearest word every single time — change an input and the winner changes with it.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>Differences between vectors are <b>directions of meaning</b>. Add and subtract them and you navigate — the "answer" is just the real word the math lands nearest to.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q"><span class="mono">king − man + woman</span> lands near <span class="mono">queen</span> because…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">the model memorized that specific fact during training.</button>
+      <button class="opt" data-correct="1">subtracting <span class="mono">man</span> and adding <span class="mono">woman</span> moves along the male→female direction while leaving "royal" untouched.</button>
+      <button class="opt" data-correct="0">the words happen to rhyme, so they cluster together.</button>
+    </div>
+    <div class="why"><b>Why:</b> the difference between two vectors is a direction of meaning. Here that direction is male→female; applying it to <span class="mono">king</span> keeps the royalty slot fixed and only swings gender, so you arrive at <span class="mono">queen</span>.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="embedding-space.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Nearby vectors mean similar things</div></a>
+  <a href="neuron.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">One neuron: multiply, add, squish</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* ============================================================
+   Lesson 3 — live analogy calculator.
+   COMPUTE, never replay: winner = (VOCAB[A] − VOCAB[B] + VOCAB[C])
+   then nearest-neighbour search over VOCAB (excluding A,B,C).
+   Uses globals from course-data.js: VOCAB, cosine.
+   ============================================================ */
+(function(){
+  "use strict";
+  const $ = (s)=>document.querySelector(s);
+  const WORDS = Object.keys(VOCAB);            // 8 analogy words
+  const selA = $('#selA'), selB = $('#selB'), selC = $('#selC');
+
+  // preset analogies (Section C — all land exactly on a vocab vector)
+  const PRESETS = [
+    ['king','man','woman'],
+    ['queen','king','prince'],
+    ['king','queen','woman'],
+    ['prince','boy','girl'],
+    ['woman','girl','boy'],
+    ['king','man','boy']
+  ];
+
+  // ---- build dropdowns ----
+  function fill(sel, chosen){
+    sel.innerHTML = '';
+    WORDS.forEach(w=>{
+      const o = document.createElement('option');
+      o.value = w; o.textContent = w;
+      if(w===chosen) o.selected = true;
+      sel.appendChild(o);
+    });
+  }
+  fill(selA,'king'); fill(selB,'man'); fill(selC,'woman');
+
+  // ---- build preset chips ----
+  const presetWrap = $('#presets');
+  PRESETS.forEach(([a,b,c])=>{
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'preset';
+    btn.innerHTML = a + ' <span class="sym">−</span> ' + b + ' <span class="sym">+</span> ' + c;
+    btn.addEventListener('click', ()=>{ selA.value=a; selB.value=b; selC.value=c; render(); });
+    presetWrap.appendChild(btn);
+  });
+
+  // ---- formatting helpers ----
+  const fmt = (n)=> (Object.is(n,-0)?0:n).toString();
+  const vec = (arr)=> '[' + arr.map(fmt).join(', ') + ']';
+  function vchip(word, arr, cls){
+    return '<span class="vchip ' + (cls||'') + '"><span class="vw">' + word +
+           '</span><span class="vn">' + vec(arr) + '</span></span>';
+  }
+
+  // ---- the live computation ----
+  function render(){
+    const a = selA.value, b = selB.value, c = selC.value;
+    const va = VOCAB[a], vb = VOCAB[b], vc = VOCAB[c];
+
+    // r = A − B + C, element-wise (3 numbers)
+    const r = va.map((x,i)=> x - vb[i] + vc[i]);
+
+    // cosine of r to every word EXCEPT A, B, C → pick nearest
+    const exclude = new Set([a,b,c]);
+    const scored = WORDS
+      .filter(w=> !exclude.has(w))
+      .map(w=> ({ w, cos: cosine(r, VOCAB[w]) }))
+      .sort((p,q)=> q.cos - p.cos);
+
+    // --- arithmetic line ---
+    $('#arith').innerHTML =
+      '<div class="arith-line">' +
+        vchip(a, va) + '<span class="sym">−</span>' +
+        vchip(b, vb) + '<span class="sym">+</span>' +
+        vchip(c, vc) + '<span class="sym">=</span>' +
+        '<span class="vchip res"><span class="vw">result</span><span class="vn">' + vec(r) + '</span></span>' +
+      '</div>' +
+      '<div class="dimkey"><b>dims:</b> [ gender(−male/+female), royalty, age(young=1) ]</div>';
+
+    // --- winner (top of the search) ---
+    const win = scored[0];
+    const exact = win.cos > 0.9995;
+    $('#winner').className = 'winner' + (exact ? ' exact' : '');
+    $('#winner').innerHTML =
+      '<span class="approx">≈ </span><span class="word">' + win.w + '</span>' +
+      '<span class="cos">cos = <b>' + win.cos.toFixed(2) + '</b> to ' + vec(VOCAB[win.w]) + '</span>' +
+      (exact ? '<span class="exact-badge">exact hit — lands on a real word</span>' : '');
+
+    // --- ranked runners-up (top 3) ---
+    $('#ranks').innerHTML = scored.slice(0,3).map((s,i)=>{
+      const w = Math.max(0, s.cos) * 100;
+      return '<div class="rank' + (i===0?' top':'') + '">' +
+               '<span class="rw">' + s.w + '</span>' +
+               '<span class="rbar"><span class="rfill" style="width:' + w.toFixed(1) + '%"></span></span>' +
+               '<span class="rcos">' + s.cos.toFixed(2) + '</span>' +
+             '</div>';
+    }).join('');
+
+    // mark the matching preset chip, if any
+    document.querySelectorAll('.preset').forEach((chip,idx)=>{
+      const [pa,pb,pc] = PRESETS[idx];
+      chip.classList.toggle('active', pa===a && pb===b && pc===c);
+    });
+  }
+
+  [selA,selB,selC].forEach(s=> s.addEventListener('change', render));
+  $('#replay').addEventListener('click', ()=>{
+    selA.value='king'; selB.value='man'; selC.value='woman'; render();
+  });
+
+  render();  // initial compute (default king − man + woman → queen)
+})();
+</script>
+</body>
+</html>

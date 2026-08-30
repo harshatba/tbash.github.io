@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>One neuron: multiply, add, squish — LLM Visual Course</title>
+<meta name="description" content="A single neuron does a real multiply-and-sum, then a squish (activation). Drag the inputs and watch every product, the sum, and tanh land on the S-curve.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+  .nrn{display:grid;grid-template-columns:1.1fr .9fr;gap:26px;align-items:start}
+  @media(max-width:760px){.nrn{grid-template-columns:1fr}}
+
+  /* fixed weights / bias panel (ROSE = weights) */
+  .fixed-w{border:1px solid rgba(255,122,138,.3);border-radius:12px;
+    background:rgba(255,122,138,.05);padding:12px 15px;margin-bottom:20px}
+  .fixed-w .fw-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--rose);margin-bottom:8px}
+  .fixed-w .fw-row{display:flex;flex-wrap:wrap;gap:8px}
+  .fixed-w .chip{font-family:var(--mono);font-size:12.5px;color:var(--ink);
+    background:var(--bg-2);border:1px solid rgba(255,122,138,.28);border-radius:7px;padding:5px 10px}
+  .fixed-w .chip b{color:var(--rose);font-weight:600}
+
+  /* sliders */
+  .sliders{display:flex;flex-direction:column;gap:15px;margin-bottom:20px}
+  .slrow{display:grid;grid-template-columns:34px 1fr 58px;gap:12px;align-items:center}
+  .slrow .lab{font-family:var(--mono);font-size:14px;color:var(--ink);font-weight:600}
+  .slrow .val{font-family:var(--mono);font-size:13px;color:var(--ink);text-align:right;
+    background:var(--bg-2);border:1px solid var(--line);border-radius:7px;padding:4px 0}
+
+  /* product tiles */
+  .ptiles{display:flex;flex-direction:column;gap:9px}
+  .ptile{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;
+    font-family:var(--mono);font-size:14px;
+    background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:10px 14px}
+  .ptile .nm{color:var(--muted);min-width:52px}
+  .ptile .ex{color:var(--ink)}
+  .ptile .ex .w{color:var(--rose)}
+  .ptile .rs{margin-left:auto;color:var(--ink);font-weight:600}
+  .ptile .rs.neg{color:var(--rose)}
+
+  .sumline{margin-top:14px;font-family:var(--mono);font-size:14.5px;line-height:1.7;
+    color:var(--ink);border-top:1px dashed var(--line-strong);padding-top:14px}
+  .sumline .b{color:var(--rose)}
+  .sumline .tot{color:var(--amber);font-weight:600}
+
+  .outcard{margin-top:16px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    border:1px solid var(--line-strong);border-left:3px solid var(--amber);border-radius:11px;
+    background:linear-gradient(180deg,rgba(255,180,84,.06),var(--bg-2));padding:14px 18px}
+  .outcard .oe{font-family:var(--mono);font-size:15px;color:var(--muted)}
+  .outcard .ov{font-family:var(--disp);font-size:1.9rem;font-weight:700;color:var(--amber);margin-left:auto;line-height:1}
+  .outcard.flat{border-left-color:var(--rose);background:linear-gradient(180deg,rgba(255,122,138,.06),var(--bg-2))}
+  .outcard.flat .ov{color:var(--rose)}
+
+  /* activation toggle */
+  .act-toggle{display:inline-flex;gap:0;margin-bottom:16px;border:1px solid var(--line-strong);
+    border-radius:9px;overflow:hidden}
+  .act-toggle button{font-family:var(--mono);font-size:12px;letter-spacing:.04em;color:var(--muted);
+    background:var(--bg-2);border:0;padding:8px 14px;cursor:pointer;transition:.18s}
+  .act-toggle button.on{background:var(--panel-2);color:var(--amber)}
+  .act-toggle button:focus-visible{outline:2px solid var(--amber);outline-offset:-2px}
+
+  /* tanh S-curve */
+  .curve-wrap{border:1px solid var(--line);border-radius:12px;background:var(--bg-2);padding:14px}
+  .curve-wrap .ct{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted-2);margin-bottom:6px}
+  svg.curve{display:block;width:100%;height:auto}
+  svg.curve .axis{stroke:var(--line-strong);stroke-width:1}
+  svg.curve .grid{stroke:var(--grid);stroke-width:1}
+  svg.curve .tanh{fill:none;stroke:var(--amber);stroke-width:2.4}
+  svg.curve .idln{fill:none;stroke:var(--rose);stroke-width:1.6;stroke-dasharray:5 5;opacity:.7}
+  svg.curve .guide{stroke:var(--muted-2);stroke-width:1;stroke-dasharray:3 4}
+  svg.curve .dot{fill:var(--ink);stroke:var(--bg);stroke-width:2;transition:cx .12s ease,cy .12s ease}
+  svg.curve .alab{font-family:var(--mono);font-size:9px;fill:var(--muted-2)}
+  svg.curve text.off{font-family:var(--mono);font-size:9px;fill:var(--rose)}
+  .curve-note{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:8px;text-align:center}
+  @media (prefers-reduced-motion: reduce){svg.curve .dot{transition:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">04 · One neuron</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 4/7</span>
+  <h1>One <span class="rose">neuron</span>: multiply, add, squish</h1>
+  <p class="lede">A single neuron takes a few numbers, multiplies each by its own weight, adds them up, and bends the total through a curve. That is the whole operation — billions of these are the model.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>A neuron takes a few input numbers, multiplies each by its own <span class="rose">weight</span>, adds them up, adds a <span class="rose">bias</span>, and passes the total through a <span class="strong-ink">squish</span>. Every multiply is just <span class="mono">input · weight</span> — that is the entire operation, wired up billions of times over.</p>
+    <p>Why squish at the end? Its real name is the <span class="strong-ink">activation function</span> (we use <code class="mono">tanh</code>). It bends the straight-line sum into a curve and keeps the answer in a tidy range. Without it, stacking neurons collapses into one straight-line step — ten layers in a row would still be a single straight line, and the network could not model anything curved.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Poke it · drag the three inputs</span><button class="btn play" id="replay"><span class="ico"></span>Reset</button></div>
+
+    <div class="nrn">
+      <!-- LEFT: the compute -->
+      <div>
+        <div class="fixed-w">
+          <div class="fw-k">fixed learned weights &amp; bias (rose)</div>
+          <div class="fw-row" id="wchips"></div>
+        </div>
+
+        <div class="sliders" id="sliders"><!-- slider rows injected --></div>
+
+        <div class="ptiles" id="ptiles"><!-- product tiles injected --></div>
+
+        <div class="sumline" id="sumline"></div>
+
+        <div class="outcard" id="outcard">
+          <span class="oe" id="oe"></span>
+          <span class="ov" id="ov"></span>
+        </div>
+      </div>
+
+      <!-- RIGHT: the S-curve -->
+      <div>
+        <div class="act-toggle" role="group" aria-label="activation">
+          <button id="btnOn" class="on" type="button">squish: tanh</button>
+          <button id="btnOff" type="button">no activation</button>
+        </div>
+        <div class="curve-wrap">
+          <div class="ct" id="curveTitle">where the sum lands on tanh</div>
+          <svg class="curve" viewBox="0 0 340 260" role="img" aria-label="The activation curve with a dot showing where the current sum lands.">
+            <line class="grid" x1="40" y1="123" x2="320" y2="123"></line>
+            <line class="axis" id="ax" x1="180" y1="20" x2="180" y2="226"></line>
+            <line class="axis" x1="40" y1="123" x2="320" y2="123"></line>
+            <path class="idln" id="idln" d=""></path>
+            <path class="tanh" id="tpath" d=""></path>
+            <line class="guide" id="gv" x1="0" y1="0" x2="0" y2="0"></line>
+            <line class="guide" id="gh" x1="0" y1="0" x2="0" y2="0"></line>
+            <circle class="dot" id="dot" r="5.5" cx="180" cy="123"></circle>
+            <text class="alab" x="322" y="127" text-anchor="end">sum →</text>
+            <text class="alab" x="184" y="30">out</text>
+            <text class="alab" x="316" y="123" text-anchor="end" dy="-4">+3.2</text>
+            <text class="alab" x="44" y="123" dy="-4">−3.2</text>
+            <text class="off" id="offlab" x="180" y="14" text-anchor="middle"></text>
+          </svg>
+          <div class="curve-note" id="curveNote"></div>
+        </div>
+      </div>
+    </div>
+
+    <p class="stage-note"><span class="key rose">TRY →</span> Drag <b>x₁</b> all the way up and watch the sum climb past the edges — yet <code class="mono">tanh</code> flattens the output near <b>+1</b>. Flip to <b>no activation</b> and the same neuron becomes a plain straight line that shoots off the chart, unbounded.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>At the defaults <code>x = [0.90, 0.30, 0.60]</code> with weights <code>w = [1.3, −0.9, 0.7]</code> and bias <code>0.1</code>:</p>
+      <p><code>0.90 × 1.3 = 1.17</code>, &nbsp;<code>0.30 × −0.9 = −0.27</code>, &nbsp;<code>0.60 × 0.7 = 0.42</code>. &nbsp;Sum: <code>1.17 + (−0.27) + 0.42 + 0.1 = 1.42</code>. &nbsp;Squish: <code>tanh(1.42) = 0.89</code>.</p>
+      <p>Drag <code>x₁</code> to a large value and the sum keeps growing, but <code>tanh</code> flattens near <code>±1</code> — that is the squish saving the number from blowing up. With <b>no activation</b> the neuron is only <code>out = Σxw + b</code>, a straight line; ten of them stacked is still one straight line. The curve is what lets stacked layers build up nonlinear meaning. The whole computation is one line of code: <code>out = Math.tanh(x.reduce((a,xi,i)=&gt;a+xi*w[i],0)+b)</code>.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">A neuron &ldquo;decides&rdquo; or &ldquo;thinks&rdquo; about its inputs.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">A neuron multiplies its inputs by weights, adds them, and squishes the total. The intelligence is in the <b>pattern</b> of billions of these, not in any one.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>A neuron is <b>multiply, add, squish</b> — and the squish (a nonlinear activation) is exactly what lets stacked layers model curves instead of collapsing back into one straight line.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">What does the activation function (&ldquo;squish&rdquo;) buy you?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">It makes the arithmetic run faster.</button>
+      <button class="opt" data-correct="1">It bends the straight-line sum into a curve, so stacked layers can model nonlinear patterns.</button>
+      <button class="opt" data-correct="0">It stores the neuron&rsquo;s weights.</button>
+    </div>
+    <div class="why"><b>Why:</b> without a nonlinear squish, any stack of neurons collapses to a single straight-line transform — the curve is what makes depth worth having.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="analogy.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Directions in meaning-space</div></a>
+  <a href="attention-qkv.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Query, Key, Value from one token</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+  /* page-specific interactivity — one neuron: out = tanh(Σ xᵢwᵢ + b) */
+  (function(){
+    "use strict";
+    var w = NEURON.w, b = NEURON.b;          // fixed weights + bias (rose)
+    var xs = NEURON.x.slice();               // live inputs
+    var squish = true;
+
+    var MINUS = '−';                     // unicode minus for display
+    function f2(n){ var s = Math.abs(n).toFixed(2); return (n < 0 ? MINUS : '') + s; }
+    function wstr(n){ return String(n).replace('-', MINUS); }   // e.g. -0.9 -> −0.9
+    function bstr(n){ return String(n).replace('-', MINUS); }   // bias natural form (0.1)
+
+    /* ---- fixed weight chips ---- */
+    (function(){
+      var html = '';
+      for(var i=0;i<w.length;i++){
+        html += '<span class="chip">w<sub>'+(i+1)+'</sub> = <b>'+wstr(w[i])+'</b></span>';
+      }
+      html += '<span class="chip">bias b = <b>'+bstr(b)+'</b></span>';
+      document.getElementById('wchips').innerHTML = html;
+    })();
+
+    /* ---- sliders ---- */
+    var slWrap = document.getElementById('sliders');
+    for(var i=0;i<xs.length;i++){
+      var row = document.createElement('div');
+      row.className = 'slrow';
+      row.innerHTML =
+        '<span class="lab">x<sub>'+(i+1)+'</sub></span>' +
+        '<input type="range" min="-1" max="1" step="0.05" value="'+xs[i]+'" ' +
+          'aria-label="input x'+(i+1)+'" data-i="'+i+'">' +
+        '<span class="val" id="v'+i+'">'+xs[i].toFixed(2)+'</span>';
+      slWrap.appendChild(row);
+    }
+    slWrap.addEventListener('input', function(e){
+      var t = e.target;
+      if(t && t.type === 'range'){
+        var i = +t.dataset.i;
+        xs[i] = parseFloat(t.value);
+        document.getElementById('v'+i).textContent = xs[i].toFixed(2);
+        render();
+      }
+    });
+
+    /* ---- activation toggle ---- */
+    var btnOn = document.getElementById('btnOn'), btnOff = document.getElementById('btnOff');
+    btnOn.addEventListener('click', function(){ squish = true;  btnOn.classList.add('on'); btnOff.classList.remove('on'); render(); });
+    btnOff.addEventListener('click', function(){ squish = false; btnOff.classList.add('on'); btnOn.classList.remove('on'); render(); });
+
+    /* ---- reset button (template's replay) ---- */
+    var reset = document.getElementById('replay');
+    if(reset) reset.addEventListener('click', function(){
+      xs = NEURON.x.slice();
+      var ranges = slWrap.querySelectorAll('input[type=range]');
+      for(var i=0;i<ranges.length;i++){ ranges[i].value = xs[i]; document.getElementById('v'+i).textContent = xs[i].toFixed(2); }
+      render();
+    });
+
+    /* ---- SVG curve geometry ---- */
+    // viewBox 340x260. plot area x:[40,320], y:[20,226]. domain X:[-3.2,3.2] Y:[-1.6,1.6]
+    var PX0=40, PX1=320, PY0=20, PY1=226, XD=3.2, YD=1.6;
+    function SX(x){ return PX0 + (x + XD)/(2*XD) * (PX1-PX0); }
+    function SY(y){ return PY0 + (YD - y)/(2*YD) * (PY1-PY0); }
+    function clamp(v,a,c){ return v<a?a : v>c?c : v; }
+
+    // build tanh path once
+    (function(){
+      var d='', n=90;
+      for(var k=0;k<=n;k++){
+        var x = -XD + (2*XD)*k/n;
+        d += (k===0?'M':'L') + SX(x).toFixed(1) + ' ' + SY(Math.tanh(x)).toFixed(1) + ' ';
+      }
+      document.getElementById('tpath').setAttribute('d', d.trim());
+      // identity line y = x, clipped to y-domain
+      var idln = 'M'+SX(-YD).toFixed(1)+' '+SY(-YD).toFixed(1)+' L'+SX(YD).toFixed(1)+' '+SY(YD).toFixed(1);
+      document.getElementById('idln').setAttribute('d', idln);
+    })();
+
+    var dot = document.getElementById('dot'),
+        gv = document.getElementById('gv'), gh = document.getElementById('gh'),
+        offlab = document.getElementById('offlab');
+
+    /* ---- render everything from the data ---- */
+    function render(){
+      // COMPUTE, never replay
+      var prods = xs.map(function(xi,i){ return xi * w[i]; });
+      var sum = prods.reduce(function(a,p){ return a+p; }, 0) + b;
+      var out = squish ? Math.tanh(sum) : sum;
+
+      // product tiles
+      var pt = '';
+      for(var i=0;i<xs.length;i++){
+        var neg = prods[i] < 0;
+        pt += '<div class="ptile">' +
+                '<span class="nm">x<sub>'+(i+1)+'</sub>·w<sub>'+(i+1)+'</sub></span>' +
+                '<span class="ex">'+xs[i].toFixed(2)+' &times; <span class="w">'+wstr(w[i])+'</span></span>' +
+                '<span class="rs'+(neg?' neg':'')+'">= '+f2(prods[i])+'</span>' +
+              '</div>';
+      }
+      document.getElementById('ptiles').innerHTML = pt;
+
+      // sum line, negatives in parentheses
+      var terms = prods.map(function(p){ return p < 0 ? '('+f2(p)+')' : f2(p); });
+      document.getElementById('sumline').innerHTML =
+        terms.join(' + ') + ' + <span class="b">'+bstr(b)+'</span> = <span class="tot">'+f2(sum)+'</span>';
+
+      // output card
+      var card = document.getElementById('outcard');
+      if(squish){
+        card.classList.remove('flat');
+        document.getElementById('oe').innerHTML = 'tanh('+f2(sum)+') =';
+      } else {
+        card.classList.add('flat');
+        document.getElementById('oe').innerHTML = 'no squish &middot; out = sum =';
+      }
+      document.getElementById('ov').textContent = f2(out);
+
+      // curve dot + guides
+      var cx = SX(clamp(sum, -XD, XD));
+      var cyRaw = SY(out);
+      var offTop = out > YD, offBot = out < -YD;
+      var cy = SY(clamp(out, -YD, YD));
+      dot.setAttribute('cx', cx.toFixed(1));
+      dot.setAttribute('cy', cy.toFixed(1));
+      dot.setAttribute('fill', squish ? 'var(--amber)' : 'var(--rose)');
+      // guides: vertical from x-axis to dot, horizontal from y-axis to dot
+      gv.setAttribute('x1', cx.toFixed(1)); gv.setAttribute('x2', cx.toFixed(1));
+      gv.setAttribute('y1', SY(0).toFixed(1)); gv.setAttribute('y2', cy.toFixed(1));
+      gh.setAttribute('y1', cy.toFixed(1)); gh.setAttribute('y2', cy.toFixed(1));
+      gh.setAttribute('x1', SX(0).toFixed(1)); gh.setAttribute('x2', cx.toFixed(1));
+
+      offlab.textContent = (offTop || offBot) ? ('out = '+f2(out)+'  (off the chart, unbounded)') : '';
+      offlab.setAttribute('y', offTop ? '14' : '256');
+
+      document.getElementById('curveTitle').textContent = squish ? 'where the sum lands on tanh' : 'no activation: out = sum (a straight line)';
+      document.getElementById('idln').style.display = squish ? 'none' : '';
+      document.getElementById('tpath').style.display = squish ? '' : 'none';
+      document.getElementById('curveNote').innerHTML = squish
+        ? 'dot at ( sum = '+f2(sum)+' , tanh = '+f2(out)+' ) — bounded to (−1, 1)'
+        : 'the rose dashed line is out = sum — it never bends and never stops';
+    }
+
+    render();
+  })();
+</script>
+</body>
+</html>

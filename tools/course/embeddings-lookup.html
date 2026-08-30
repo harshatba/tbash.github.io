@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Token IDs → embeddings — LLM Visual Course</title>
+<meta name="description" content="An embedding is not computed — it is looked up as one row of a learned table, one row per token ID.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+  .lk{display:flex;flex-direction:column;gap:22px;width:100%}
+
+  /* token chips + id field */
+  .picker{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+  .chips{display:flex;flex-wrap:wrap;gap:9px}
+  .chip{
+    font-family:var(--mono);font-size:13px;letter-spacing:.02em;
+    color:var(--muted);background:var(--bg-2);
+    border:1px solid var(--line);border-radius:9px;
+    padding:8px 13px;cursor:pointer;transition:.16s;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .chip .cid{font-size:11px;color:var(--muted-2)}
+  .chip:hover{border-color:var(--line-strong);color:var(--ink)}
+  .chip.active{
+    border-color:var(--cyan);color:var(--cyan);
+    background:rgba(67,214,200,.10);box-shadow:0 0 0 1px rgba(67,214,200,.25) inset;
+  }
+  .chip.active .cid{color:var(--cyan)}
+  .chip:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+  .idbox{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12.5px;color:var(--muted-2)}
+  .idbox input{
+    width:64px;font-family:var(--mono);font-size:15px;color:var(--cyan);
+    background:var(--bg-2);border:1px solid var(--line-strong);border-radius:8px;
+    padding:7px 10px;text-align:center;
+  }
+  .idbox input:focus-visible{outline:2px solid var(--cyan);outline-offset:1px;border-color:var(--cyan)}
+
+  /* the lookup table */
+  .tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:rgba(11,16,32,.4)}
+  table.lut{border-collapse:collapse;width:100%;min-width:420px;font-family:var(--mono)}
+  table.lut thead th{
+    font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted-2);
+    font-weight:500;text-align:right;padding:11px 12px;border-bottom:1px solid var(--line-strong);
+    white-space:nowrap;
+  }
+  table.lut thead th.h-id,table.lut thead th.h-tok{text-align:left}
+  table.lut thead th.h-dim{color:var(--cyan);opacity:.85}
+  table.lut tbody td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:13.5px;text-align:right;transition:background .18s}
+  table.lut tbody tr:last-child td{border-bottom:none}
+  td.c-id{text-align:left;color:var(--muted-2);width:1%;white-space:nowrap}
+  td.c-tok{text-align:left;color:var(--ink)}
+  td.num{color:var(--cyan);position:relative}
+  table.lut tbody tr:hover td{background:rgba(67,214,200,.04)}
+  table.lut tbody tr.active td{background:rgba(67,214,200,.10)}
+  table.lut tbody tr.active td.c-tok{color:var(--cyan)}
+  table.lut tbody tr.active{position:relative}
+  /* read-head sweep across the active row */
+  table.lut tbody tr.reading td.num::after{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(67,214,200,.45),transparent);
+    animation:scan .5s ease both;
+  }
+  @keyframes scan{from{opacity:0;transform:translateX(-40%)}40%{opacity:1}to{opacity:0;transform:translateX(40%)}}
+
+  /* the big readout */
+  .readout{
+    border:1px solid var(--line-strong);border-left:3px solid var(--cyan);border-radius:12px;
+    background:linear-gradient(180deg,rgba(67,214,200,.07),var(--bg-2));
+    padding:20px 22px;display:flex;flex-direction:column;gap:12px;
+  }
+  .ro-line{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font-family:var(--mono)}
+  .ro-label{font-size:1.05rem;color:var(--ink)}
+  .ro-label .tok{color:var(--cyan);font-weight:600}
+  .ro-vec{display:flex;align-items:center;gap:7px;font-size:1.15rem;color:var(--cyan)}
+  .ro-vec .brk{color:var(--muted-2);font-size:1.2rem}
+  .ro-slot{
+    min-width:52px;text-align:center;padding:6px 8px;border-radius:8px;
+    background:rgba(67,214,200,.10);border:1px solid rgba(67,214,200,.22);
+    font-weight:500;
+  }
+  .ro-slot.pop{animation:pop .32s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes pop{from{opacity:0;transform:translateY(-6px) scale(.8)}to{opacity:1;transform:none}}
+  .ro-cap{color:var(--muted);font-size:.92rem;font-family:var(--body)}
+  .ro-cap b{color:var(--cyan);font-weight:600}
+
+  /* flying "read-head" clones copied from the row into the readout */
+  .fly{
+    position:fixed;z-index:80;font-family:var(--mono);font-size:13.5px;color:var(--cyan);
+    padding:6px 8px;border-radius:8px;background:rgba(67,214,200,.16);
+    border:1px solid rgba(67,214,200,.4);pointer-events:none;
+    transition:transform .42s cubic-bezier(.3,.7,.2,1),opacity .42s ease;
+    will-change:transform,opacity;
+  }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · Meaning &amp; Attention</a><span class="sep">/</span>
+    <span class="here">1 · The lookup table</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 1/7</span>
+  <h1>Where does the <span class="cyan">vector</span> come from?</h1>
+  <p class="lede">A token starts life as a plain integer ID. Turning it into a list of numbers isn't a calculation — it's a <span class="strong-ink">lookup</span>: go to that row of a learned table and read it off.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~4 min</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>none</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>A <span class="strong-ink">token</span> is a chunk of text the model reads as one unit, and each distinct token has a fixed integer ID — its row number. That ID carries zero meaning on its own: <code>cat</code> might be ID <code>2543</code>, but <code>2543</code> is just <em>where the row lives</em>, not what it means.</p>
+    <p>So the model keeps one giant <span class="strong-ink">lookup table</span>: one row per token, and each row is a short list of numbers — the token's <span class="cyan">embedding vector</span>. "Turning a token into a vector" is literally <em>go to that row and read it off.</em> No arithmetic — just a lookup.</p>
+    <p>Those numbers were <span class="strong-ink">learned</span> during training and are now frozen; we only read them. Each <span class="cyan">dimension</span> is one slot — a learned axis of meaning. No human labels these axes, but we pretend-label ours (<span class="cyan">animacy · action · state · function</span>) so the numbers are readable. Real models use hundreds to thousands of dimensions; ours has 4.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Poke it · look a token up by ID</span><button class="btn play" id="replay"><span class="ico"></span>Replay</button></div>
+    <div class="demo-box" id="demo" style="min-height:auto;display:block">
+      <div class="lk">
+        <div class="picker">
+          <div class="chips" id="chips" role="group" aria-label="pick a token"></div>
+          <label class="idbox">type an ID (0–6):
+            <input type="number" id="idInput" min="0" max="6" step="1" inputmode="numeric" aria-label="token ID 0 to 6">
+          </label>
+        </div>
+
+        <div class="tbl-wrap">
+          <table class="lut" aria-label="embedding lookup table">
+            <thead>
+              <tr>
+                <th class="h-id">ID</th>
+                <th class="h-tok">token</th>
+                <th class="h-dim">animacy</th>
+                <th class="h-dim">action</th>
+                <th class="h-dim">state</th>
+                <th class="h-dim">function</th>
+              </tr>
+            </thead>
+            <tbody id="lutBody"></tbody>
+          </table>
+        </div>
+
+        <div class="readout" aria-live="polite">
+          <div class="ro-line">
+            <span class="ro-label">embedding(<span class="tok" id="roTok">it</span>) =</span>
+            <span class="ro-vec" id="roVec"><span class="brk">[</span><span class="brk">]</span></span>
+          </div>
+          <div class="ro-cap" id="roCap"></div>
+        </div>
+      </div>
+    </div>
+    <p class="stage-note"><span class="key cyan">TRY →</span> Click a token chip (or type an ID 0–6). Watch the matching row light up and its four numbers get copied — read straight out of the table — into the big <code>embedding( )</code> readout. This is the exact same table the attention pages later read from.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>A real embedding table is <code>vocab_size × d_model</code> — e.g. <code>50,000</code> rows × <code>4,096</code> numbers ≈ <b>200 million</b> weights, and that's <em>just for the lookup</em>, before any attention or neurons. Ours is a toy <code>7 × 4</code>.</p>
+      <p>The row for <code>it</code> (ID 4) is <code>[0.8, 0.1, 0.2, 0.3]</code>. The widget doesn't store that string anywhere — it fetches <code>E[TOKENS[4]]</code> from the data array by index every time you click. Edit a number in the table's source and the readout changes with it: the value is <em>addressed</em>, not memorized.</p>
+      <p><b>One line ahead —</b> right after this lookup, the model <em>literally adds</em> a second "where it sits in the sentence" vector onto this row, element by element: <code>vector = meaning + position</code>. Not a metaphor — real addition. (That step is covered in the classic walkthrough.)</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The model computes a word's vector from its letters.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">It looks the vector up by ID in a table it learned during training. The letters were already gone at tokenization — all that's left is a row number.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>An embedding is <b>one row of a learned lookup table</b>, one row per token ID. Getting it is indexing, not computing.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Turning token ID 2543 into its embedding is mostly…</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">a calculation over the digits 2-5-4-3</button>
+      <button class="opt" data-correct="1">reading row 2543 of a learned table</button>
+      <button class="opt" data-correct="0">asking attention what it means</button>
+    </div>
+    <div class="why"><b>Why:</b> an embedding is a lookup — the row was learned in training, and reading it is just indexing by the token's ID. No math over the digits, and nothing has attended to anything yet.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="index.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Course map</div></a>
+  <a href="embedding-space.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Nearby vectors mean similar things</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* ===========================================================
+   Lesson 1 — the embedding lookup table.
+   Everything is ADDRESSED from the shared data (course-data.js):
+   the table cells and the readout are pulled from E[TOKENS[i]]
+   by index on every interaction. Nothing is a hard-coded string.
+   =========================================================== */
+(function(){
+  "use strict";
+  const REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const chips   = document.getElementById('chips');
+  const idInput = document.getElementById('idInput');
+  const body    = document.getElementById('lutBody');
+  const roTok   = document.getElementById('roTok');
+  const roVec   = document.getElementById('roVec');
+  const roCap   = document.getElementById('roCap');
+  const replay  = document.getElementById('replay');
+
+  // tidy number format: keep the real value, guarantee at least one decimal.
+  const fmt = v => { const s = String(Math.round(v*1000)/1000); return s.indexOf('.') >= 0 ? s : s + '.0'; };
+
+  let current = 4;      // default: "it" (ID 4) — matches the spec caption "row #4"
+  let gen = 0;          // animation generation guard against rapid re-clicks
+
+  /* ---- build chips (one per token, from TOKENS) ---- */
+  TOKENS.forEach((tok, i) => {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.type = 'button';
+    b.dataset.idx = i;
+    b.innerHTML = '<span class="cid">' + i + '</span>' + tok;
+    b.addEventListener('click', () => select(i, true));
+    chips.appendChild(b);
+  });
+
+  /* ---- build table rows (ID | token | d0..d3), all from E ---- */
+  const rowEls = [];
+  TOKENS.forEach((tok, i) => {
+    const vec = E[tok];
+    const tr = document.createElement('tr');
+    tr.dataset.idx = i;
+    let html = '<td class="c-id">' + i + '</td><td class="c-tok">' + tok + '</td>';
+    vec.forEach(v => { html += '<td class="num">' + fmt(v) + '</td>'; });
+    tr.innerHTML = html;
+    tr.addEventListener('click', () => select(i, true));
+    body.appendChild(tr);
+    rowEls.push(tr);
+  });
+
+  /* ---- render the readout for token index i, pulled from the data ---- */
+  function setReadout(i, popped){
+    const tok = TOKENS[i];
+    const vec = E[tok];               // <-- addressed by index, never a stored string
+    roTok.textContent = tok;
+    let html = '<span class="brk">[</span>';
+    vec.forEach((v, d) => {
+      html += '<span class="ro-slot' + (popped ? ' pop' : '') + '" style="animation-delay:' + (d*70) + 'ms">' + fmt(v) + '</span>';
+    });
+    html += '<span class="brk">]</span>';
+    roVec.innerHTML = html;
+    roCap.innerHTML = 'row #' + i + ' → this is <b>' + tok + '</b>’s meaning, before anything else happens to it.';
+  }
+
+  /* ---- flying "read head": clone each number cell, glide it to its slot ---- */
+  function flyCopy(i, myGen){
+    // clear the slots first so the numbers visibly arrive
+    const tok = TOKENS[i], vec = E[tok];
+    roTok.textContent = tok;
+    let shell = '<span class="brk">[</span>';
+    vec.forEach(() => { shell += '<span class="ro-slot">&middot;</span>'; });
+    shell += '<span class="brk">]</span>';
+    roVec.innerHTML = shell;
+    roCap.innerHTML = 'row #' + i + ' → this is <b>' + tok + '</b>’s meaning, before anything else happens to it.';
+
+    const slots = roVec.querySelectorAll('.ro-slot');
+    const cells = rowEls[i].querySelectorAll('td.num');
+
+    rowEls[i].classList.add('reading');
+    setTimeout(() => { if(gen === myGen) rowEls[i].classList.remove('reading'); }, 520);
+
+    cells.forEach((cell, d) => {
+      const from = cell.getBoundingClientRect();
+      const to   = slots[d].getBoundingClientRect();
+      const fly = document.createElement('div');
+      fly.className = 'fly';
+      fly.textContent = fmt(vec[d]);
+      fly.style.left = from.left + 'px';
+      fly.style.top  = from.top + 'px';
+      fly.style.width = from.width + 'px';
+      fly.style.height = from.height + 'px';
+      fly.style.display = 'flex';
+      fly.style.alignItems = 'center';
+      fly.style.justifyContent = 'center';
+      document.body.appendChild(fly);
+      const dx = (to.left + to.width/2) - (from.left + from.width/2);
+      const dy = (to.top + to.height/2) - (from.top + from.height/2);
+      // stagger + glide
+      requestAnimationFrame(() => {
+        fly.style.transitionDelay = (d*80) + 'ms';
+        fly.style.transform = 'translate(' + dx + 'px,' + dy + 'px) scale(.92)';
+      });
+      const land = () => {
+        if(gen === myGen){
+          slots[d].textContent = fmt(vec[d]);
+          slots[d].classList.remove('pop'); void slots[d].offsetWidth; slots[d].classList.add('pop');
+        }
+        fly.remove();
+      };
+      fly.addEventListener('transitionend', land, {once:true});
+      setTimeout(land, 700 + d*80);   // safety net if transitionend is missed
+    });
+  }
+
+  /* ---- select a token: highlight, sync controls, update readout ---- */
+  function select(i, animate){
+    i = Math.max(0, Math.min(TOKENS.length - 1, i|0));
+    current = i;
+    gen++;
+
+    rowEls.forEach((tr, k) => tr.classList.toggle('active', k === i));
+    Array.from(chips.children).forEach((c, k) => c.classList.toggle('active', k === i));
+    if(document.activeElement !== idInput) idInput.value = i;
+
+    if(animate && !REDUCE){
+      flyCopy(i, gen);
+    } else {
+      setReadout(i, !REDUCE);
+    }
+  }
+
+  /* ---- typed ID field ---- */
+  idInput.addEventListener('input', () => {
+    const raw = idInput.value.trim();
+    if(raw === '') return;
+    let v = parseInt(raw, 10);
+    if(isNaN(v)) return;
+    v = Math.max(0, Math.min(TOKENS.length - 1, v));
+    select(v, true);
+  });
+
+  replay.addEventListener('click', () => select(current, true));
+
+  // initial state (no animation on load)
+  select(4, false);
+})();
+</script>
+</body>
+</html>

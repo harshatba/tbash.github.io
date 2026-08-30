@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Query, Key, Value — LLM Visual Course</title>
+<meta name="description" content="Q, K and V are three different vectors built from the same token's embedding by three different weight matrices — computed live, no scoring yet.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+  .widget{width:100%;display:flex;flex-direction:column;gap:22px}
+
+  /* token picker */
+  .tok-row{display:flex;flex-wrap:wrap;gap:9px;justify-content:center}
+  .tok{
+    font-family:var(--mono);font-size:.92rem;color:var(--muted);
+    background:var(--bg-2);border:1px solid var(--line);border-radius:9px;
+    padding:8px 13px;cursor:pointer;transition:.16s;
+  }
+  .tok:hover{border-color:var(--line-strong);color:var(--ink)}
+  .tok:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .tok.sel{
+    color:var(--amber);border-color:var(--amber);
+    background:rgba(255,180,84,.10);box-shadow:0 0 0 3px rgba(255,180,84,.06);
+  }
+
+  /* embedding readout */
+  .embed{
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;justify-content:center;
+    border:1px solid var(--line);border-radius:12px;background:var(--bg-2);
+    padding:15px 18px;
+  }
+  .embed .lab{font-family:var(--mono);font-size:.9rem;color:var(--muted)}
+  .embed .lab b{color:var(--cyan);font-weight:600}
+  .vec{display:flex;gap:7px;flex-wrap:wrap}
+  .cell{
+    font-family:var(--mono);font-size:.9rem;min-width:52px;text-align:center;
+    padding:7px 6px;border-radius:8px;border:1px solid var(--line);
+  }
+  .cell.cyan-c{color:var(--cyan);background:rgba(67,214,200,.08);border-color:rgba(67,214,200,.28)}
+  .cell.violet-c{color:var(--violet);background:rgba(157,140,255,.09);border-color:rgba(157,140,255,.30)}
+  .dimlab{font-family:var(--mono);font-size:.62rem;letter-spacing:.03em;color:var(--muted-2);display:block;margin-top:3px;text-transform:lowercase}
+
+  /* the arrow / convention strip */
+  .convo{
+    text-align:center;font-family:var(--mono);font-size:.82rem;color:var(--muted);
+    background:rgba(157,140,255,.06);border:1px dashed rgba(157,140,255,.30);
+    border-radius:10px;padding:11px 14px;
+  }
+  .convo b{color:var(--violet);font-weight:600}
+
+  /* three QKV cards */
+  .qkv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media(max-width:720px){.qkv-grid{grid-template-columns:1fr}}
+  .qcard{
+    border:1px solid rgba(157,140,255,.28);border-radius:14px;
+    background:linear-gradient(180deg,rgba(157,140,255,.06),var(--bg-2));
+    padding:16px 16px 14px;display:flex;flex-direction:column;gap:12px;
+  }
+  .qhead{display:flex;align-items:baseline;gap:9px}
+  .qbadge{
+    font-family:var(--mono);font-weight:600;font-size:.95rem;color:var(--violet);
+    border:1px solid rgba(157,140,255,.4);border-radius:7px;padding:2px 9px;
+    background:rgba(157,140,255,.10);
+  }
+  .qgloss{font-size:.82rem;color:var(--muted);line-height:1.35}
+  .qmat{font-family:var(--mono);font-size:.74rem;color:var(--muted-2)}
+  .qvec{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start}
+  .qvec .cell{min-width:46px;font-size:.86rem}
+  .worked{
+    font-family:var(--mono);font-size:.76rem;line-height:1.6;color:var(--muted);
+    background:rgba(11,16,32,.55);border:1px solid var(--line);border-radius:9px;
+    padding:9px 11px;overflow-x:auto;
+  }
+  .worked .idx{color:var(--violet)}
+  .worked .eq{color:var(--ink);font-weight:600}
+  .worked .cap{display:block;color:var(--muted-2);font-size:.72rem;margin-top:5px}
+
+  .next-note{
+    text-align:center;font-size:.95rem;color:var(--muted);
+    border-top:1px solid var(--line);padding-top:16px;
+  }
+  .next-note b{color:var(--violet)}
+
+  /* hood matrices */
+  .mat-wrap{display:flex;flex-wrap:wrap;gap:18px;margin:6px 0 4px}
+  .mat{display:flex;flex-direction:column;gap:6px}
+  .mat .mt{font-family:var(--mono);font-size:.8rem;color:var(--violet)}
+  .grid4{display:grid;grid-template-columns:repeat(4,minmax(34px,1fr));gap:4px}
+  .grid4 span{
+    font-family:var(--mono);font-size:.76rem;text-align:center;color:var(--muted);
+    background:rgba(11,16,32,.5);border:1px solid var(--line);border-radius:6px;padding:5px 2px;
+  }
+  .grid4 span.nz{color:var(--violet);border-color:rgba(157,140,255,.3);background:rgba(157,140,255,.08)}
+  .fullmul{font-family:var(--mono);font-size:.82rem;line-height:1.75;color:var(--muted)}
+  .fullmul .eq{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">05 · Query, Key, Value</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 5/7</span>
+  <h1><span class="violet">Query</span>, <span class="violet">Key</span>, <span class="violet">Value</span>: three vectors from one token</h1>
+  <p class="lede">Attention begins by making three new vectors out of each token's embedding — same input row, three different weight matrices. This page builds those pieces. It does <span class="strong-ink">not</span> score them yet.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~4 min</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Every token already has an <span class="cyan">embedding</span> — its row of numbers from the lookup table. Attention's first move is to turn that one row into <span class="strong-ink">three</span> new vectors by multiplying it through three different learned weight matrices: <code class="inl">Wq</code>, <code class="inl">Wk</code>, <code class="inl">Wv</code>.</p>
+    <p>The plain gloss: the <span class="violet">Query</span> is what this token is <em>looking for</em>; the <span class="violet">Key</span> is what it <em>advertises it offers</em>; the <span class="violet">Value</span> is the <em>content it will hand over</em> if it gets attended to. Each one is just a matrix multiply — <code class="inl">q = Wq·e</code> — using the same row·vector rule from the neuron page. Nothing is compared or decided yet; we are only preparing the pieces.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>Poke it · pick a token, watch Q / K / V get built</span><button class="btn play" id="replay"><span class="ico"></span>Replay</button></div>
+    <div class="widget" id="widget">
+      <div class="tok-row" id="tokRow" role="group" aria-label="Pick a token"></div>
+
+      <div class="embed" id="embed"></div>
+
+      <div class="convo">the row·vector rule: <b>out[i] = Σⱼ W[i][j] · e[j]</b> — output slot <i>i</i> is matrix row <i>i</i> dotted with the embedding</div>
+
+      <div class="qkv-grid" id="qkv"></div>
+
+      <p class="next-note" id="nextNote"></p>
+    </div>
+    <p class="stage-note"><span class="key violet">TRY →</span> Click any token. Its <span class="cyan">embedding</span> lights up, then three <span class="violet">violet</span> vectors — Q, K, V — are computed from it live, each showing one worked row of the multiply. The three matrices are fixed; the token is what changes.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers</summary>
+    <div class="hood-body">
+      <p>The three weight matrices (head 1), each <code>4×4</code>. Non-zero weights are highlighted. <code>Wq</code> boosts the animacy and function slots into the Query; <code>Wk</code> passes the raw dimensions through but damps the function slot (×0.3); <code>Wv</code> is the embedding with <b>dim 3 (function) halved (×0.5)</b>, so the Value resembles the token but is not identical to it.</p>
+      <div class="mat-wrap" id="hoodMats"></div>
+      <p>The full multiply for <code>it</code>'s Query, <code>q = Wq · e_it</code> with <code>e_it = [0.8, 0.1, 0.2, 0.3]</code> — all four output slots, each one row of <code>Wq</code> dotted with the embedding:</p>
+      <div class="fullmul" id="hoodMul"></div>
+      <p>Same embedding, three matrices, three different vectors. That is the whole idea of this page — the comparison between a Query and a Key is the <em>next</em> page.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Query, Key, and Value are three different tokens.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">They are three different vectors built from the <em>same</em> token's embedding by three different learned matrices — <code>q = Wq·e</code>, <code>k = Wk·e</code>, <code>v = Wv·e</code>.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>One embedding in, <b>three vectors out</b> — Q, K and V — each the product of a different weight matrix. This page prepared the pieces; scoring them comes next.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">Where do a token's Q, K, and V come from?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">Three different tokens nearby in the sentence.</button>
+      <button class="opt" data-correct="1">The token's own embedding, multiplied by three different weight matrices.</button>
+      <button class="opt" data-correct="0">The softmax output of the previous layer.</button>
+    </div>
+    <div class="why"><b>Why:</b> <code>q = Wq·e</code>, <code>k = Wk·e</code>, <code>v = Wv·e</code> — same input row, three learned matrices, three different vectors.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="neuron.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">One neuron: multiply, add, squish</div></a>
+  <a href="attention-scoring.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">How attention actually computes</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* ============================================================
+   Lesson 5 — Q / K / V. Everything is COMPUTED from E and the
+   W matrices via matvec on each click; nothing is replayed from
+   a stored table. Uses globals from course-data.js:
+   TOKENS, E, DIM_LABELS, Wq, Wk, Wv, matvec.
+   ============================================================ */
+(function(){
+  "use strict";
+  const $  = (s,r)=> (r||document).querySelector(s);
+
+  // clean number: round to <=2 decimals, no trailing zeros
+  const fmt = x => String(Math.round(x*1e4)/1e4);
+  // format a raw weight for a worked term (keeps it short)
+  const fw  = x => String(Math.round(x*1e4)/1e4);
+
+  const MATS = [
+    {key:'Q', W:Wq, mat:'Wq', gloss:'what this token is <em>looking for</em>', row:0},
+    {key:'K', W:Wk, mat:'Wk', gloss:'what it <em>advertises it offers</em>', row:3},
+    {key:'V', W:Wv, mat:'Wv', gloss:'the <em>content</em> it hands over if attended to', row:3}
+  ];
+  // per-card caption explaining the chosen worked row
+  const ROWCAP = {
+    Q:'row 0 — Wq boosts animacy (×2) and folds in the function slot (×1)',
+    K:'row 3 — Wk damps the function slot to ×0.3',
+    V:'row 3 — Wv halves the function slot (×0.5), so V ≈ e but not equal'
+  };
+
+  const tokRow = $('#tokRow');
+  const embedEl = $('#embed');
+  const qkvEl = $('#qkv');
+  const nextNote = $('#nextNote');
+  let selected = 'it';
+
+  /* ---- build token chips ---- */
+  TOKENS.forEach(tok=>{
+    const b = document.createElement('button');
+    b.className = 'tok';
+    b.textContent = tok;
+    b.setAttribute('aria-pressed','false');
+    b.addEventListener('click', ()=> select(tok));
+    tokRow.appendChild(b);
+  });
+
+  /* ---- render a vector as cells (optionally with dim labels) ---- */
+  function vecCells(arr, cls, labels){
+    return arr.map((x,i)=>{
+      const lab = labels ? '<span class="dimlab">'+labels[i]+'</span>' : '';
+      return '<span class="cell '+cls+'">'+fmt(x)+lab+'</span>';
+    }).join('');
+  }
+
+  /* ---- worked-row string for output index r of W·e ---- */
+  function workedRow(key, W, e, r){
+    const terms = W[r].map((w,j)=> fw(w)+'·'+fmt(e[j])).join(' + ');
+    const val = W[r].reduce((s,w,j)=> s + w*e[j], 0);
+    return '<span class="idx">'+key.toLowerCase()+'['+r+']</span> = '+terms+
+           ' = <span class="eq">'+fmt(val)+'</span>'+
+           '<span class="cap">'+ROWCAP[key]+'</span>';
+  }
+
+  /* ---- main render: recompute Q/K/V from E + matrices every time ---- */
+  function select(tok){
+    selected = tok;
+    const e = E[tok];
+
+    // chips
+    Array.from(tokRow.children).forEach(c=>{
+      const on = c.textContent === tok;
+      c.classList.toggle('sel', on);
+      c.setAttribute('aria-pressed', on ? 'true':'false');
+    });
+
+    // embedding readout
+    embedEl.innerHTML =
+      '<span class="lab">embedding &nbsp;<b>e('+tok+')</b> &nbsp;=</span>' +
+      '<span class="vec">'+vecCells(e,'cyan-c',DIM_LABELS)+'</span>';
+
+    // three QKV cards — computed live via matvec
+    qkvEl.innerHTML = MATS.map(m=>{
+      const out = matvec(m.W, e);   // <-- the live compute
+      return ''+
+        '<div class="qcard">'+
+          '<div class="qhead"><span class="qbadge">'+m.key+'</span>'+
+            '<span class="qgloss">'+m.gloss+'</span></div>'+
+          '<div class="qmat">'+m.key.toLowerCase()+' = '+m.mat+' · e</div>'+
+          '<div class="qvec">'+vecCells(out,'violet-c',null)+'</div>'+
+          '<div class="worked">'+workedRow(m.key, m.W, e, m.row)+'</div>'+
+        '</div>';
+    }).join('');
+
+    nextNote.innerHTML = 'Prepared, not compared. <b>Next page: what happens when '+
+      tok+'’s Query meets every token’s Key.</b>';
+  }
+
+  /* ---- replay button: re-run the compute for the current token ---- */
+  $('#replay').addEventListener('click', ()=> select(selected));
+
+  /* ---- under-the-hood: render matrices + full multiply from globals ---- */
+  function grid4(W){
+    return '<div class="grid4">'+ W.flatMap(r=> r.map(v=>
+      '<span class="'+(v!==0?'nz':'')+'">'+fw(v)+'</span>')).join('') +'</div>';
+  }
+  const hoodMats = $('#hoodMats');
+  hoodMats.innerHTML = [['Wq',Wq],['Wk',Wk],['Wv',Wv]].map(([name,W])=>
+    '<div class="mat"><span class="mt">'+name+'</span>'+grid4(W)+'</div>').join('');
+
+  const hoodMul = $('#hoodMul');
+  (function(){
+    const e = E['it'];
+    hoodMul.innerHTML = Wq.map((row,r)=>{
+      const terms = row.map((w,j)=> fw(w)+'·'+fmt(e[j])).join(' + ');
+      const val = row.reduce((s,w,j)=> s + w*e[j], 0);
+      return 'q['+r+'] = '+terms+' = <span class="eq">'+fmt(val)+'</span>';
+    }).join('<br>') + '<br><br>q = [<span class="eq">' +
+      matvec(Wq,e).map(fmt).join(', ') + '</span>]';
+  })();
+
+  /* ---- initial paint ---- */
+  select(selected);
+})();
+</script>
+</body>
+</html>
