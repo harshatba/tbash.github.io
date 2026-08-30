@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How LLMs Work — Meaning &amp; Attention</title>
+<meta name="description" content="An interactive 7-lesson track on where a token's meaning-vector comes from and how attention actually computes — every number computed live, no analogies.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- hub-specific layout only (shared stuff lives in course.css) ---- */
+  .lesson-list{display:flex;flex-direction:column;gap:14px;margin:14px 0 6px;list-style:none;padding:0}
+  .lesson-list li{margin:0}
+  .lesson-card{
+    display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:16px;
+    border:1px solid var(--line-strong);border-radius:14px;padding:18px 22px;
+    background:linear-gradient(180deg,var(--panel-2),var(--bg-2));transition:.2s;
+  }
+  .lesson-card:hover{border-color:var(--amber);transform:translateY(-2px)}
+  .lesson-card:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+  .lc-num{
+    font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--muted-2);
+    width:2.4ch;text-align:right;flex:none;
+  }
+  .lc-dot{width:11px;height:11px;border-radius:50%;flex:none;box-shadow:0 0 0 4px rgba(255,255,255,.03)}
+  .lc-dot.amber{background:var(--amber)}
+  .lc-dot.cyan{background:var(--cyan)}
+  .lc-dot.violet{background:var(--violet)}
+  .lc-dot.rose{background:var(--rose)}
+  .lc-body{min-width:0}
+  .lc-ttl{font-family:var(--disp);font-weight:600;font-size:1.08rem;color:var(--ink);line-height:1.25}
+  .lc-blurb{color:var(--muted);font-size:.9rem;margin-top:4px}
+  .lc-blurb .flag{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--violet);margin-left:8px;white-space:nowrap}
+  .lc-arrow{font-family:var(--mono);color:var(--muted-2);font-size:1.1rem;flex:none;transition:.2s}
+  .lesson-card:hover .lc-arrow{color:var(--amber);transform:translateX(3px)}
+
+  /* legend of the color canon */
+  .legend{display:flex;flex-wrap:wrap;gap:10px 20px;margin:20px 0 2px}
+  .legend .li{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;letter-spacing:.04em;color:var(--muted)}
+  .legend .d{width:9px;height:9px;border-radius:50%}
+  .legend .d.amber{background:var(--amber)}
+  .legend .d.cyan{background:var(--cyan)}
+  .legend .d.violet{background:var(--violet)}
+  .legend .d.rose{background:var(--rose)}
+
+  /* classic-walkthrough block */
+  .overview-links{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+  .ov-card{
+    display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:12px;padding:16px 20px;
+    background:var(--bg-2);transition:.2s;
+  }
+  .ov-card:hover{border-color:var(--cyan);transform:translateY(-1px)}
+  .ov-name{font-family:var(--disp);font-weight:600;font-size:1rem;color:var(--ink)}
+  .ov-desc{color:var(--muted);font-size:.9rem}
+
+  /* single start CTA in place of the two-up pager */
+  .start-cta{margin:52px 0 20px}
+  .start-cta a{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    border:1px solid var(--line-strong);border-radius:16px;padding:22px 26px;
+    background:linear-gradient(120deg,rgba(255,180,84,.10),rgba(157,140,255,.10)),linear-gradient(180deg,var(--panel-2),var(--bg-2));
+    transition:.2s;
+  }
+  .start-cta a:hover{border-color:var(--amber);transform:translateY(-2px)}
+  .start-cta .dir{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2)}
+  .start-cta .ttl{font-family:var(--disp);font-weight:600;font-size:1.25rem;color:var(--ink);margin-top:6px}
+  .start-cta .go{font-family:var(--mono);font-size:1.5rem;color:var(--amber);flex:none}
+
+  @media(max-width:560px){
+    .lesson-card{grid-template-columns:auto auto 1fr;padding:16px 18px;gap:12px}
+    .lc-arrow{display:none}
+    .start-cta a{flex-direction:column;align-items:flex-start}
+  }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="/">cd .. / tbash.xyz</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <span class="eyebrow">Interactive deep-dive · Part 1</span>
+  <h1>How LLMs Work — <span class="cyan">Meaning</span> &amp; <span class="violet">Attention</span></h1>
+  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Seven short pages, one idea and one live widget each; every number on screen is computed in front of you.</p>
+  <div class="pill-row">
+    <span class="meta-pill">📚 <b>7 lessons</b></span>
+    <span class="meta-pill">🎚 <b>interactive</b></span>
+    <span class="meta-pill">math: <b>traceable</b></span>
+  </div>
+</header>
+
+<!-- ============ COLOR LEGEND ============ -->
+<section class="block wrap reveal" style="padding-top:6px;padding-bottom:6px">
+  <div class="legend" aria-hidden="true">
+    <span class="li"><span class="d amber"></span> tokens / structure</span>
+    <span class="li"><span class="d cyan"></span> vectors / embeddings</span>
+    <span class="li"><span class="d violet"></span> attention</span>
+    <span class="li"><span class="d rose"></span> weights</span>
+  </div>
+</section>
+
+<!-- ============ THE 7 LESSONS ============ -->
+<section class="block wrap reveal" style="padding-top:10px">
+  <ol class="lesson-list">
+    <li>
+      <a class="lesson-card" href="embeddings-lookup.html">
+        <span class="lc-num">01</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Where does the vector come from?</span>
+          <span class="lc-blurb">Read a token's vector straight out of the learned lookup table, by row.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="embedding-space.html">
+        <span class="lc-num">02</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Nearby vectors mean similar things</span>
+          <span class="lc-blurb">Rank every token by dot-product similarity to an anchor you pick.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="analogy.html">
+        <span class="lc-num">03</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Meaning has directions you can do arithmetic with</span>
+          <span class="lc-blurb">Compute A − B + C on real vectors and watch the nearest word fall out.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="neuron.html">
+        <span class="lc-num">04</span>
+        <span class="lc-dot rose" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">One neuron: multiply, add, squish</span>
+          <span class="lc-blurb">Slide the inputs and watch each multiply, the running sum, and the tanh squish.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="attention-qkv.html">
+        <span class="lc-num">05</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Query, Key, Value: three vectors from one token</span>
+          <span class="lc-blurb">Turn one embedding into its Q, K and V through three different weight matrices.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="attention-scoring.html">
+        <span class="lc-num">06</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">How attention actually computes<span class="flag">flagship</span></span>
+          <span class="lc-blurb">Watch Q·K dot products → softmax weights that sum to 1 → a blended Value vector, live.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="attention-heads.html">
+        <span class="lc-num">07</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Many heads, many kinds of attention</span>
+          <span class="lc-blurb">Toggle heads and watch the same token get routed three different ways.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+  </ol>
+</section>
+
+<!-- ============ THE CLASSIC WALKTHROUGH ============ -->
+<section class="block wrap reveal">
+  <h2 style="font-size:clamp(1.3rem,3vw,1.7rem)">The classic walkthrough <span class="muted" style="font-weight:400;font-size:.75em">(overview pages)</span></h2>
+  <p class="prose" style="margin-top:10px">Want the wide tour first? These are the full narrated overviews the deep-dive above zooms in on.</p>
+  <div class="overview-links">
+    <a class="ov-card" href="/tools/llm-visual-course.html">
+      <span class="ov-name">How LLMs Work</span>
+      <span class="ov-desc">the full 12-chapter tour</span>
+    </a>
+    <a class="ov-card" href="/tools/llm-inference-efficiency.html">
+      <span class="ov-name">How LLMs Run Fast</span>
+      <span class="ov-desc">inference &amp; serving</span>
+    </a>
+  </div>
+</section>
+
+<!-- ============ MYTH / REALITY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">LLMs understand words the way we do.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">They turn every token into a list of numbers and do arithmetic on those lists — this track shows the arithmetic.</span></div>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">What will you actually do on the Attention II page?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">Read an analogy about spotlights.</button>
+      <button class="opt" data-correct="1">Watch dot products and softmax get computed from real vectors.</button>
+      <button class="opt" data-correct="0">Memorize the Q / K / V definitions.</button>
+    </div>
+    <div class="why"><b>Why:</b> every widget on this track computes its answer live from the data — no answer is typed in as a constant.</div>
+  </div>
+</section>
+
+<!-- ============ START CTA (single-card pager) ============ -->
+<nav class="start-cta wrap">
+  <a href="embeddings-lookup.html" data-nav="next">
+    <span>
+      <span class="dir">Start the track</span>
+      <span class="ttl">Lesson 1 · Where does the vector come from?</span>
+    </span>
+    <span class="go" aria-hidden="true">→</span>
+  </a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · Part 1 · Meaning &amp; Attention · <a href="/">tbash.xyz</a></div>
+  <div>Every number on these pages is computed in front of you.</div>
+</div></footer>
+
+<script src="course.js" defer></script>
+</body>
+</html>
