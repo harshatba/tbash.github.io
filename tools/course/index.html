@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>How LLMs Work — Meaning &amp; Attention</title>
-<meta name="description" content="An interactive 15-lesson track: where a token's meaning-vector comes from, how attention computes, and how the vector becomes the next word — every number computed live, no analogies.">
+<meta name="description" content="An interactive 15-lesson track: where a token's meaning-vector comes from, how attention computes, and how the vector becomes the next word — every number computed live. Then Part 2 shows how that same computation is made fast to run — KV cache, quantization, batching, speculative decoding.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -87,9 +87,10 @@
 <header class="lesson-head wrap reveal">
   <span class="eyebrow">Interactive deep-dive · Part 1</span>
   <h1>How LLMs Work — <span class="cyan">Meaning</span> &amp; <span class="violet">Attention</span></h1>
-  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Fifteen short pages, one idea and one live widget each — from tokens through attention to the next-word prediction — and every number on screen is computed in front of you.</p>
+  <p class="lede">This track opens the two hardest boxes in an LLM — <span class="strong-ink">where a token's meaning-vector comes from</span> and <span class="strong-ink">how attention actually computes</span> — and makes you trace real numbers, not analogies. Fifteen short pages, one idea and one live widget each — from tokens through attention to the next-word prediction — and every number on screen is computed in front of you. Then <span class="strong-ink">Part 2 · How LLMs Run Fast</span> takes the same model and shows how it's served in milliseconds — the KV cache, quantization, paging, batching, speculative decoding, and the roofline that explains why they all help.</p>
   <div class="pill-row">
-    <span class="meta-pill">📚 <b>15 lessons</b></span>
+    <span class="meta-pill">📚 <b>Part 1 · 15 lessons</b></span>
+    <span class="meta-pill">⚡ <b>Part 2 · 8 lessons</b></span>
     <span class="meta-pill">🎚 <b>interactive</b></span>
     <span class="meta-pill">math: <b>traceable</b></span>
   </div>
@@ -106,8 +107,10 @@
   </div>
 </section>
 
-<!-- ============ THE 15 LESSONS ============ -->
-<section class="block wrap reveal" style="padding-top:10px">
+<!-- ============ PART 1 · THE 15 LESSONS ============ -->
+<section class="block wrap reveal" id="part1" style="padding-top:10px">
+  <h2 style="font-size:clamp(1.5rem,3.4vw,2.1rem);margin-bottom:6px">Part 1 · <span class="cyan">How LLMs Work</span></h2>
+  <p class="prose" style="margin-bottom:8px">From a token ID to the next word — meaning, attention, and the full forward pass, every number computed live.</p>
   <ol class="lesson-list">
     <li>
       <a class="lesson-card" href="embeddings-lookup.html">
@@ -278,6 +281,102 @@
   </ol>
 </section>
 
+<!-- ============ PART 2 · HOW LLMs RUN FAST ============ -->
+<section class="block wrap reveal" id="part2" style="padding-top:10px">
+  <h2 style="font-size:clamp(1.5rem,3.4vw,2.1rem);margin-bottom:6px">Part 2 · <span class="green">How LLMs Run Fast</span></h2>
+  <p class="prose" style="margin-bottom:8px">Same model, now served in milliseconds. Eight pages, one lever each — and every FLOP, byte, and token-per-second is computed live from one 7B-class model preset.</p>
+  <ol class="lesson-list">
+    <li>
+      <a class="lesson-card" href="prefill-decode.html">
+        <span class="lc-num">01</span>
+        <span class="lc-dot amber" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Reading the prompt is fast; writing is slow</span>
+          <span class="lc-blurb">Compute prefill vs decode time and watch decode dominate (~156×).</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="kv-cache.html">
+        <span class="lc-num">02</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">The KV cache: don't recompute the past</span>
+          <span class="lc-blurb">Count the triangular blow-up of recomputing every past token's K/V.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="kv-memory.html">
+        <span class="lc-num">03</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">The cache grows and eats VRAM</span>
+          <span class="lc-blurb">Size the KV cache live: layers × heads × dim × seq × 2 × bytes.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="quantization.html">
+        <span class="lc-num">04</span>
+        <span class="lc-dot rose" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Store each weight in fewer bits</span>
+          <span class="lc-blurb">Snap weights onto int8/int4 levels; watch memory drop 4×.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="paged-attention.html">
+        <span class="lc-num">05</span>
+        <span class="lc-dot cyan" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Paged attention: stop reserving unused memory</span>
+          <span class="lc-blurb">Compute padding waste for reserve-max vs paged (~75% → ~1%).</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="continuous-batching.html">
+        <span class="lc-num">06</span>
+        <span class="lc-dot green" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Read the weights once, serve many</span>
+          <span class="lc-blurb">Compute GPU utilization and throughput for static vs continuous.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="speculative-decoding.html">
+        <span class="lc-num">07</span>
+        <span class="lc-dot green" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">Guess ahead, verify in one pass</span>
+          <span class="lc-blurb">Compute expected tokens/step and speedup from an acceptance rate.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+    <li>
+      <a class="lesson-card" href="roofline.html">
+        <span class="lc-num">08</span>
+        <span class="lc-dot violet" aria-hidden="true"></span>
+        <span class="lc-body">
+          <span class="lc-ttl">The roofline: moving weights, not math<span class="flag">the why</span></span>
+          <span class="lc-blurb">Compute arithmetic intensity and land below the ridge point.</span>
+        </span>
+        <span class="lc-arrow" aria-hidden="true">→</span>
+      </a>
+    </li>
+  </ol>
+</section>
+
 <!-- ============ THE CLASSIC WALKTHROUGH ============ -->
 <section class="block wrap reveal">
   <h2 style="font-size:clamp(1.3rem,3vw,1.7rem)">The classic walkthrough <span class="muted" style="font-weight:400;font-size:.75em">(overview pages)</span></h2>
@@ -285,11 +384,11 @@
   <div class="overview-links">
     <a class="ov-card" href="/tools/llm-visual-course.html">
       <span class="ov-name">How LLMs Work</span>
-      <span class="ov-desc">the full 12-chapter tour</span>
+      <span class="ov-desc">the original narrated version of Part 1</span>
     </a>
     <a class="ov-card" href="/tools/llm-inference-efficiency.html">
       <span class="ov-name">How LLMs Run Fast</span>
-      <span class="ov-desc">inference &amp; serving</span>
+      <span class="ov-desc">the original narrated version — Part 2 is now the interactive track above</span>
     </a>
   </div>
 </section>
