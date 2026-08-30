@@ -7,6 +7,10 @@ external:
 
 # Grouped navigation sections shown on the homepage
 sections:
+  - title: Learn
+    entries:
+      - title: 🧠 How LLMs Work — a visual course
+        url: /tools/llm-visual-course.html
   - title: Games
     entries:
       - title: Sudoku

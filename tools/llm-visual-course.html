@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>How LLMs Work — a visual course</title>
+<meta name="description" content="A beginner-friendly, visual, interactive course on how large language models and transformers actually work — from tokens to attention to different architectures.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1020;
+    --bg-2:#0e1528;
+    --panel:#131c34;
+    --panel-2:#182444;
+    --line:rgba(140,160,210,.14);
+    --line-strong:rgba(140,160,210,.28);
+    --ink:#eaf0ff;
+    --muted:#93a1c4;
+    --muted-2:#657297;
+    --amber:#ffb454;      /* TOKENS */
+    --amber-deep:#f5972a;
+    --cyan:#43d6c8;       /* EMBEDDINGS / VECTORS */
+    --violet:#9d8cff;     /* ATTENTION / GENERATION */
+    --rose:#ff7a8a;       /* WEIGHTS / PARAMETERS */
+    --green:#6ee787;      /* TRAINING */
+    --grid:rgba(120,150,220,.06);
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(157,140,255,.10), transparent 60%),
+      radial-gradient(1000px 640px at 8% 12%, rgba(67,214,200,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:var(--body);
+    font-size:17px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{background:rgba(255,180,84,.28)}
+
+  .wrap{max-width:1000px;margin:0 auto;padding:0 26px}
+
+  a{color:var(--cyan);text-decoration:none}
+  a:hover{color:var(--ink)}
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.24em;
+    text-transform:uppercase;
+    color:var(--amber);
+    display:inline-flex;align-items:center;gap:10px;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--amber);opacity:.7}
+
+  h1,h2,h3,h4{font-family:var(--disp);font-weight:600;line-height:1.08;margin:0}
+  p{margin:0}
+  .lede{color:var(--muted);font-size:1.06rem;max-width:62ch}
+  .strong-ink{color:var(--ink);font-weight:500}
+  .amber{color:var(--amber)}
+  .cyan{color:var(--cyan)}
+  .violet{color:var(--violet)}
+  .rose{color:var(--rose)}
+  .green{color:var(--green)}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- top progress + back ---------- */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:60;
+    height:3px;background:transparent;
+  }
+  .topbar .fill{height:100%;width:0;background:linear-gradient(90deg,var(--amber),var(--violet));transition:width .1s linear}
+  .home-link{
+    position:fixed;top:14px;left:16px;z-index:61;
+    font-family:var(--mono);font-size:12px;letter-spacing:.04em;
+    color:var(--muted-2);background:rgba(11,16,32,.6);
+    border:1px solid var(--line);border-radius:8px;padding:6px 11px;
+    backdrop-filter:blur(6px);
+  }
+  .home-link:hover{color:var(--amber);border-color:var(--line-strong)}
+
+  /* chapter dot rail */
+  .rail{
+    position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:55;
+    display:flex;flex-direction:column;gap:11px;
+  }
+  @media(max-width:900px){.rail{display:none}}
+  .rail a{width:9px;height:9px;border-radius:50%;border:1px solid var(--line-strong);background:transparent;transition:.2s;position:relative}
+  .rail a:hover{border-color:var(--amber)}
+  .rail a.on{background:var(--amber);border-color:var(--amber);box-shadow:0 0 12px rgba(255,180,84,.5)}
+  .rail a .lbl{
+    position:absolute;right:18px;top:50%;transform:translateY(-50%);
+    font-family:var(--mono);font-size:10.5px;white-space:nowrap;color:var(--muted);
+    background:rgba(14,21,40,.9);border:1px solid var(--line);border-radius:6px;padding:3px 8px;
+    opacity:0;pointer-events:none;transition:.18s;
+  }
+  .rail a:hover .lbl{opacity:1}
+
+  /* ---------- HERO ---------- */
+  header.hero{
+    min-height:100svh;
+    display:flex;flex-direction:column;justify-content:center;
+    position:relative;
+    padding:80px 0 60px;
+    border-bottom:1px solid var(--line);
+    overflow:hidden;
+  }
+  .hero-grid{
+    position:absolute;inset:0;
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+    background-size:46px 46px;
+    mask-image:radial-gradient(circle at 50% 42%,#000 30%,transparent 78%);
+    pointer-events:none;
+  }
+  .hero h1{
+    font-size:clamp(2.5rem,6.4vw,4.7rem);
+    letter-spacing:-.02em;
+    margin:22px 0 0;
+    max-width:15ch;
+  }
+  .hero h1 .flow{color:var(--amber)}
+  .hero .lede{margin-top:22px;font-size:1.14rem}
+  .hero .wrap{position:relative;z-index:2}
+
+  .ambient{position:absolute;inset:0;pointer-events:none;z-index:0}
+  .chip-drift{
+    position:absolute;font-family:var(--mono);font-size:12px;
+    padding:4px 9px;border-radius:7px;
+    border:1px solid var(--line-strong);
+    background:rgba(20,30,56,.6);
+    color:var(--muted);white-space:nowrap;
+    animation:drift linear infinite;
+    opacity:0;
+  }
+  @keyframes drift{
+    0%{transform:translateX(-60px);opacity:0}
+    12%{opacity:.9}
+    88%{opacity:.9}
+    100%{transform:translateX(105vw);opacity:0}
+  }
+  .scroll-hint{
+    margin-top:52px;font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    color:var(--muted-2);text-transform:uppercase;display:flex;align-items:center;gap:12px;
+  }
+  .scroll-hint .dot{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:blink 1.6s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:.25}50%{opacity:1}}
+
+  /* legend strip */
+  .legend{
+    display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:40px;
+    padding-top:26px;border-top:1px solid var(--line);
+  }
+  .legend .li{display:flex;align-items:center;gap:9px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .legend .sw{width:12px;height:12px;border-radius:4px;flex:none}
+
+  /* ---------- SECTIONS ---------- */
+  section{padding:92px 0;border-bottom:1px solid var(--line);position:relative}
+  .sec-head{max-width:66ch;margin-bottom:40px}
+  .sec-head .num{font-family:var(--mono);font-size:13px;color:var(--muted-2);letter-spacing:.1em}
+  .sec-head h2{font-size:clamp(1.7rem,3.8vw,2.55rem);letter-spacing:-.015em;margin:14px 0 18px}
+  .sec-head p{color:var(--muted);font-size:1.05rem}
+  .sec-head p + p{margin-top:14px}
+
+  .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  .stage{
+    background:linear-gradient(180deg,var(--panel),var(--bg-2));
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:32px;
+    position:relative;
+    overflow:hidden;
+  }
+  .stage::before{
+    content:"";position:absolute;inset:0;border-radius:18px;
+    background:linear-gradient(180deg,rgba(255,255,255,.03),transparent 30%);
+    pointer-events:none;
+  }
+  .stage-label{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--muted-2);margin-bottom:22px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  }
+  .stage-note{
+    color:var(--muted);font-size:.92rem;margin-top:22px;border-top:1px solid var(--line);padding-top:18px;
+  }
+  .stage-note .key{font-family:var(--mono);font-size:.8rem;letter-spacing:.06em}
+
+  /* myth / reality callout */
+  .myth{margin-top:20px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:rgba(11,16,32,.5)}
+  .myth .m-row{display:grid;grid-template-columns:74px 1fr;gap:13px;padding:12px 15px;font-size:.9rem;align-items:start}
+  .myth .m-row + .m-row{border-top:1px solid var(--line)}
+  .myth .lbl2{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;border-radius:6px;text-align:center;white-space:nowrap}
+  .myth .m-x{background:rgba(255,122,138,.14);color:var(--rose)}
+  .myth .m-r{background:rgba(110,231,135,.14);color:var(--green)}
+  .myth .txt{color:var(--muted)}
+  .myth .m-row.real .txt{color:var(--ink)}
+
+  .btn{
+    font-family:var(--mono);font-size:12.5px;letter-spacing:.06em;
+    color:var(--ink);background:var(--panel-2);
+    border:1px solid var(--line-strong);border-radius:8px;
+    padding:8px 15px;cursor:pointer;transition:.18s;
+    display:inline-flex;align-items:center;gap:8px;
+  }
+  .btn:hover{border-color:var(--amber);color:var(--amber)}
+  .btn:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .btn .ico{width:0;height:0;border-left:8px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent}
+
+  /* token chips */
+  .tok{
+    font-family:var(--mono);font-size:13px;
+    padding:6px 11px;border-radius:8px;
+    border:1px solid var(--line-strong);
+    background:rgba(24,36,68,.7);
+    color:var(--muted);white-space:nowrap;
+    transition:.3s;
+  }
+  .tok.on{border-color:var(--amber);color:#1a1204;background:var(--amber);box-shadow:0 0 22px rgba(255,180,84,.35)}
+  .tok-id{font-size:10px;color:var(--muted-2);display:block;text-align:center;margin-top:3px}
+
+  .token-line{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;min-height:52px}
+  .sentence{font-family:var(--mono);font-size:15px;color:var(--muted);letter-spacing:.01em}
+
+  /* ---------- 01 predict next token ---------- */
+  .predict-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-family:var(--mono);font-size:1.15rem;margin-bottom:26px}
+  .predict-row .blank{color:var(--violet);border-bottom:2px dashed var(--violet);min-width:64px;text-align:center;transition:.3s}
+  .predict-row .blank.done{border-bottom-color:transparent;color:var(--violet)}
+  .cand{display:grid;grid-template-columns:120px 1fr 58px;gap:14px;align-items:center;margin-bottom:11px}
+  @media(max-width:560px){.cand{grid-template-columns:88px 1fr 48px;gap:10px}}
+  .cand .w{font-family:var(--mono);font-size:14px;color:var(--muted);text-align:right}
+  .cand.top .w{color:var(--violet)}
+  .cand .bar-track{height:22px;background:var(--bg-2);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .cand .bar{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,#5a4fd6,var(--violet));transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+  .cand.top .bar{background:linear-gradient(90deg,var(--amber-deep),var(--amber))}
+  .cand .pct{font-family:var(--mono);font-size:13px;color:var(--muted-2);text-align:right}
+
+  /* ---------- embeddings scatter ---------- */
+  .embed-wrap{display:grid;grid-template-columns:1.35fr .9fr;gap:24px;align-items:stretch}
+  @media(max-width:760px){.embed-wrap{grid-template-columns:1fr}}
+  .scatter{position:relative;width:100%;aspect-ratio:1/.82;background:
+      radial-gradient(circle at 50% 50%, rgba(67,214,200,.05), transparent 70%),
+      var(--bg-2);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .dot{position:absolute;transform:translate(-50%,-50%);font-family:var(--mono);font-size:12px;
+    padding:4px 8px;border-radius:20px;border:1px solid var(--line-strong);background:rgba(19,28,52,.85);
+    color:var(--muted);cursor:default;transition:.25s;white-space:nowrap}
+  .dot.hot{border-color:var(--cyan);color:#04201d;background:var(--cyan);box-shadow:0 0 18px rgba(67,214,200,.4);z-index:3}
+  .dot.dim{opacity:.28}
+  .dot.near{border-color:var(--cyan);color:var(--cyan)}
+  .embed-side .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);margin-bottom:8px}
+  .embed-side p{color:var(--muted);font-size:.95rem;margin-bottom:16px}
+  .analogy{font-family:var(--mono);font-size:.95rem;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;line-height:1.9}
+  .analogy .op{color:var(--muted-2)}
+  .analogy .res{color:var(--cyan)}
+
+  /* ---------- neural net / params ---------- */
+  .net-wrap{display:grid;grid-template-columns:1fr .95fr;gap:26px;align-items:center}
+  @media(max-width:760px){.net-wrap{grid-template-columns:1fr}}
+  .param-read{text-align:center}
+  .param-read .v{font-family:var(--mono);font-size:2.6rem;color:var(--rose);line-height:1}
+  .param-read .v small{font-size:.4em;color:var(--muted-2)}
+  .param-read .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-2);margin-top:8px}
+  .scale-btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:20px}
+  .seg{font-family:var(--mono);font-size:12.5px;padding:8px 15px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s}
+  .seg.active{background:var(--rose);color:#2a0810;border-color:var(--rose)}
+  .seg:focus-visible{outline:2px solid var(--rose);outline-offset:2px}
+  .grid-dots{width:100%;aspect-ratio:1/.7;background:var(--bg-2);border:1px solid var(--line);border-radius:14px;position:relative;overflow:hidden}
+
+  /* ---------- attention ---------- */
+  .attn-stage{position:relative}
+  .attn-tokens{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;position:relative;z-index:2;margin:14px 0 8px}
+  .atok{
+    font-family:var(--mono);font-size:14px;padding:9px 13px;border-radius:9px;
+    border:1px solid var(--line-strong);background:rgba(24,36,68,.75);color:var(--muted);
+    cursor:pointer;transition:.2s;position:relative;
+  }
+  .atok:hover{border-color:var(--violet)}
+  .atok.query{border-color:var(--violet);color:#0d0a1e;background:var(--violet);box-shadow:0 0 20px rgba(157,140,255,.5)}
+  .atok .wbar{position:absolute;left:0;right:0;bottom:-7px;height:4px;border-radius:3px;background:var(--violet);width:0;opacity:.9;transition:.4s}
+  .attn-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}
+  .qkv{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:34px}
+  @media(max-width:640px){.qkv{grid-template-columns:1fr}}
+  .qkv .card{background:var(--bg-2);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .qkv .card h4{font-size:1rem;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .qkv .card p{color:var(--muted);font-size:.88rem}
+  .qkv .tagq{color:var(--violet)}
+  .badge{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:5px;background:rgba(157,140,255,.16);color:var(--violet)}
+  .attn-caption{text-align:center;font-family:var(--mono);font-size:.9rem;color:var(--muted);min-height:22px;margin-top:6px}
+  .attn-caption b{color:var(--violet)}
+
+  /* ---------- transformer block ---------- */
+  .tf-wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:28px;align-items:center}
+  @media(max-width:760px){.tf-wrap{grid-template-columns:1fr}}
+  .tf-block{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:0 auto;width:100%}
+  .tf-layer{border:1px solid var(--line);border-radius:11px;padding:13px 16px;background:var(--bg-2);position:relative;transition:.3s}
+  .tf-layer .t{font-family:var(--disp);font-size:.98rem;font-weight:600}
+  .tf-layer .d{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:2px}
+  .tf-layer.attn{border-color:rgba(157,140,255,.5)}
+  .tf-layer.ff{border-color:rgba(255,122,138,.45)}
+  .tf-layer.norm{border-style:dashed}
+  .tf-layer.lit{box-shadow:0 0 0 2px rgba(255,180,84,.35);border-color:var(--amber)}
+  .tf-res{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);text-align:center}
+  .stack-ctl{margin-top:8px}
+  .stack-read{font-family:var(--mono);font-size:2rem;color:var(--amber);text-align:center;line-height:1}
+  .stack-read small{font-size:.42em;color:var(--muted-2)}
+  input[type=range]{width:100%;accent-color:var(--amber);height:26px;cursor:pointer}
+  .stack-viz{display:flex;flex-direction:column-reverse;gap:3px;margin-top:16px;min-height:150px;justify-content:flex-end}
+  .stack-slab{height:7px;border-radius:3px;background:linear-gradient(90deg,rgba(157,140,255,.5),rgba(255,122,138,.5));border:1px solid var(--line)}
+
+  /* ---------- positional ---------- */
+  .pos-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:640px){.pos-grid{grid-template-columns:1fr}}
+  .pos-card{background:var(--bg-2);border:1px solid var(--line);border-radius:13px;padding:20px;text-align:center}
+  .pos-card .sent{font-family:var(--mono);font-size:1.05rem;color:var(--ink);margin-bottom:6px}
+  .pos-card .mean{color:var(--muted);font-size:.9rem}
+  .pos-tokens{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:22px 0 6px}
+  .ptok{font-family:var(--mono);font-size:14px;padding:8px 12px;border-radius:9px;border:1px solid var(--line-strong);background:rgba(24,36,68,.75);color:var(--muted);position:relative;transition:.25s}
+  .ptok .pos{position:absolute;top:-9px;right:-9px;width:20px;height:20px;border-radius:50%;background:var(--cyan);color:#04201d;font-size:10px;display:flex;align-items:center;justify-content:center;font-weight:600;opacity:0;transition:.3s}
+  .ptok.showpos .pos{opacity:1}
+
+  /* ---------- decoding / temperature ---------- */
+  .temp-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  .temp-val{font-family:var(--mono);font-size:1.6rem;color:var(--amber)}
+  .temp-tag{font-family:var(--mono);font-size:.8rem;color:var(--muted-2)}
+  .temp-out{font-family:var(--mono);font-size:1.05rem;color:var(--ink);background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-top:20px;min-height:54px;line-height:1.7}
+  .temp-out .gen{color:var(--violet)}
+
+  /* ---------- training stages ---------- */
+  .stages{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+  @media(max-width:760px){.stages{grid-template-columns:1fr}}
+  .stage-card{background:var(--bg-2);border:1px solid var(--line);padding:22px;position:relative}
+  .stages .stage-card:nth-child(1){border-radius:13px 0 0 13px}
+  .stages .stage-card:nth-child(3){border-radius:0 13px 13px 0}
+  @media(max-width:760px){.stages .stage-card{border-radius:13px!important}}
+  .stage-card .n{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--green);text-transform:uppercase}
+  .stage-card h4{font-size:1.1rem;margin:8px 0}
+  .stage-card p{color:var(--muted);font-size:.88rem}
+  .stage-card .chip{display:inline-block;font-family:var(--mono);font-size:10.5px;margin-top:12px;padding:3px 9px;border-radius:6px;background:rgba(110,231,135,.12);color:var(--green)}
+  .flow-mark{position:absolute;right:-11px;top:50%;transform:translateY(-50%);z-index:4;color:var(--green);font-size:1.3rem;background:var(--panel);border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border:1px solid var(--line)}
+  @media(max-width:760px){.flow-mark{right:50%;top:auto;bottom:-13px;transform:translateX(50%) rotate(90deg)}}
+
+  /* ---------- architectures ---------- */
+  .arch-ctl{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px}
+  .arch-seg{font-family:var(--mono);font-size:13px;padding:10px 16px;border-radius:9px;border:1px solid var(--line-strong);background:var(--panel-2);color:var(--muted);cursor:pointer;transition:.18s}
+  .arch-seg.active{background:var(--violet);color:#0d0a1e;border-color:var(--violet)}
+  .arch-seg:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+  .arch-body{display:grid;grid-template-columns:190px 1fr;gap:26px;align-items:center}
+  @media(max-width:640px){.arch-body{grid-template-columns:1fr;gap:20px}}
+  .mask-grid{display:grid;gap:3px;width:170px;margin:0 auto}
+  .mcell{aspect-ratio:1;border-radius:3px;background:var(--bg-2);border:1px solid var(--line);transition:.2s}
+  .mcell.on{background:var(--violet);border-color:var(--violet);box-shadow:0 0 8px rgba(157,140,255,.3)}
+  .mask-cap{font-family:var(--mono);font-size:10.5px;color:var(--muted-2);text-align:center;margin-top:10px}
+  .arch-info h4{font-size:1.25rem;margin-bottom:4px}
+  .arch-info .flow{font-family:var(--mono);font-size:12px;color:var(--violet);margin-bottom:12px}
+  .arch-info p{color:var(--muted);font-size:.95rem;margin-bottom:12px}
+  .arch-info .row{display:flex;gap:10px;flex-wrap:wrap}
+  .pill{font-family:var(--mono);font-size:11px;padding:5px 10px;border-radius:7px;border:1px solid var(--line);color:var(--muted);background:var(--bg-2)}
+  .pill b{color:var(--ink);font-weight:500}
+
+  /* ---------- context / scale ---------- */
+  .scale-row{display:grid;grid-template-columns:150px 1fr 120px;gap:16px;align-items:center;margin-bottom:16px}
+  @media(max-width:560px){.scale-row{grid-template-columns:110px 1fr 84px;gap:10px}}
+  .scale-row .lab{font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .scale-track{height:20px;background:var(--bg-2);border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .scale-fill{height:100%;width:0;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--violet));transition:width 1.3s cubic-bezier(.2,.8,.2,1)}
+  .scale-row .num{font-family:var(--mono);font-size:13px;color:var(--ink);text-align:right}
+
+  /* ---------- recap / glossary ---------- */
+  .recap{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .rrow{display:grid;grid-template-columns:minmax(150px,.8fr) 1.6fr;gap:0;background:var(--panel)}
+  @media(max-width:640px){.rrow{grid-template-columns:1fr}}
+  .rq{padding:15px 18px;font-family:var(--mono);font-size:13px;color:var(--amber);background:var(--bg-2);border-right:1px solid var(--line)}
+  @media(max-width:640px){.rq{border-right:none;border-bottom:1px solid var(--line)}}
+  .ra{padding:15px 18px;color:var(--muted);font-size:.94rem}
+  .ra b{color:var(--ink);font-weight:500}
+
+  footer{padding:70px 0 100px;color:var(--muted-2);font-size:.9rem}
+  footer .wrap{display:flex;flex-direction:column;gap:10px}
+  footer a{color:var(--muted)}
+  footer a:hover{color:var(--amber)}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="fill" id="progressFill"></div></div>
+<a class="home-link" href="/">cd ..</a>
+<nav class="rail" id="rail" aria-label="Chapters"></nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <div class="hero-grid"></div>
+  <div class="ambient" id="ambient" aria-hidden="true"></div>
+  <div class="wrap">
+    <span class="eyebrow">A visual course · no math required</span>
+    <h1>How a <span class="flow">large language model</span> actually works</h1>
+    <p class="lede">ChatGPT, Claude, Gemini — under the hood they're all the same surprisingly simple idea, stacked up billions of times. This is a scroll-through, click-around tour that builds the whole picture from scratch: <span class="strong-ink">tokens</span>, <span class="strong-ink">embeddings</span>, <span class="strong-ink">attention</span>, the <span class="strong-ink">transformer</span>, and the different shapes these models come in. One animation at a time.</p>
+
+    <div class="legend" aria-label="Colour key used throughout">
+      <span class="li"><span class="sw" style="background:var(--amber)"></span> Tokens</span>
+      <span class="li"><span class="sw" style="background:var(--cyan)"></span> Embeddings / vectors</span>
+      <span class="li"><span class="sw" style="background:var(--violet)"></span> Attention / generation</span>
+      <span class="li"><span class="sw" style="background:var(--rose)"></span> Weights / parameters</span>
+      <span class="li"><span class="sw" style="background:var(--green)"></span> Training</span>
+    </div>
+
+    <div class="scroll-hint"><span class="dot"></span> Scroll to begin · 12 short chapters</div>
+  </div>
+</header>
+
+<!-- ============ 01 · THE BIG IDEA ============ -->
+<section id="idea" data-label="The big idea">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">01 / THE BIG IDEA</div>
+      <h2>At heart, it just predicts the <span class="violet">next word</span></h2>
+      <p>Strip away all the hype and a language model does one humble thing: given some text, it guesses what comes next. Not one guess — a <span class="strong-ink">ranked list of possibilities</span>, each with a probability. That's the entire engine. Everything else in this course is machinery that makes that one guess shockingly good.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Next-token prediction</span><button class="btn" data-replay="predict"><span class="ico"></span>Replay</button></div>
+      <div class="predict-row">
+        <span>The cat sat on the</span><span class="blank" id="predBlank">▁▁▁</span>
+      </div>
+      <div id="candList"></div>
+      <p class="stage-note"><span class="key cyan">HOW IT WRITES →</span> &nbsp;To produce a whole sentence, it picks one word, sticks it on the end, and asks the very same question again — <span class="strong-ink">"now what comes next?"</span> — over and over. A reply is just this guess, looped hundreds of times.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">LLMs look up answers in a big database, or memorise the web.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">There's nothing to search. Each next-token guess is computed fresh from statistical patterns baked into the weights — it's prediction, not retrieval.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 02 · TOKENS ============ -->
+<section id="tokens" data-label="Tokens">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">02 / THE UNIT</div>
+      <h2>First, text is chopped into <span class="amber">tokens</span></h2>
+      <p>A model can't read letters or words the way you do — it works with numbers. So step one is a <span class="strong-ink">tokenizer</span> that splits text into small chunks called tokens (a short word, or a piece of a longer one) and swaps each for an ID number. Common words become one token; rarer words get broken into parts.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Tokenizer</span><button class="btn" data-replay="tok"><span class="ico"></span>Replay</button></div>
+      <p class="sentence" style="margin-bottom:22px">"The cat sat on the mat, contentedly."</p>
+      <div class="token-line" id="tokLine"></div>
+      <p class="stage-note"><span class="key amber">NOTICE →</span> &nbsp;<span class="mono">"contentedly"</span> splits into pieces while <span class="mono">"cat"</span> stays whole. From here on, every length, speed and limit you hear about a model is counted in <span class="strong-ink">tokens</span>, not words.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">One word always equals one token.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Common words are a single token, but rare or long words break into pieces — and spaces and punctuation count as tokens too.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 03 · EMBEDDINGS ============ -->
+<section id="embeddings" data-label="Embeddings">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">03 / MEANING AS SPACE</div>
+      <h2>Each token becomes a point in <span class="cyan">meaning-space</span></h2>
+      <p>An ID number like <span class="mono">2543</span> carries no meaning. So the model turns each token into a long list of numbers — a <span class="strong-ink">vector</span>, or <em>embedding</em> — that places it as a point in a vast space. The trick: words with similar meanings land close together, and directions in that space capture relationships.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Embedding space · hover a word</span><span class="mono" style="font-size:11px">(shown in 2D — really hundreds of dimensions)</span></div>
+      <div class="embed-wrap">
+        <div class="scatter" id="scatter"></div>
+        <div class="embed-side">
+          <div class="k">What you're seeing</div>
+          <p>Hover any word to light up its nearest neighbours. Notice <span class="cyan">cat / kitten / dog</span> huddle together, far from <span class="cyan">Paris / Tokyo</span>. Meaning became geometry.</p>
+          <div class="k">Directions mean something too</div>
+          <div class="analogy">
+            king <span class="op">−</span> man <span class="op">+</span> woman <span class="op">≈</span> <span class="res">queen</span>
+          </div>
+          <p style="margin-top:14px;font-size:.86rem">The step from <span class="mono">man→woman</span> is the same move as <span class="mono">king→queen</span>. The model learns these directions on its own.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 04 · WEIGHTS ============ -->
+<section id="weights" data-label="Weights">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">04 / THE LEARNED KNOBS</div>
+      <h2>Inside is a web of <span class="rose">weights</span> — billions of them</h2>
+      <p>A neural network is just numbers flowing through layers, multiplied and added along connections. Each connection has a <span class="strong-ink">weight</span> — a tiny knob. <span class="rose">Training</span> is the process of nudging every knob until the next-token guesses come out right. A model's "size" is simply how many of these knobs it has.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Parameters (weights)</span></div>
+      <div class="net-wrap">
+        <div class="grid-dots" id="gridDots"></div>
+        <div>
+          <div class="param-read">
+            <div class="v" id="paramVal">3<small></small></div>
+            <div class="k" id="paramLbl">weights in this toy net</div>
+          </div>
+          <div class="scale-btns" id="scaleBtns">
+            <button class="seg active" data-p="toy">toy net</button>
+            <button class="seg" data-p="small">small LM</button>
+            <button class="seg" data-p="gpt2">GPT-2</button>
+            <button class="seg" data-p="frontier">frontier</button>
+          </div>
+          <p style="color:var(--muted);font-size:.88rem;margin-top:18px;text-align:center">Same idea at every scale — just more knobs. The knobs <span class="rose">are</span> the model; they're what gets shipped as "the weights."</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 05 · POSITION ============ -->
+<section id="position" data-label="Position">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">05 / ORDER MATTERS</div>
+      <h2>Telling the model <span class="cyan">where</span> each token sits</h2>
+      <p>In a moment, attention will let every word look at all the others at once — which means, on its own, it has <strong>no sense of order</strong>. But <span class="mono">"dog bites man"</span> and <span class="mono">"man bites dog"</span> are very different! So first, each token's embedding gets a <span class="strong-ink">position tag</span> added in, telling the model where in the line it sits.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Same words, different order</span><button class="btn" id="posToggle">Show positions</button></div>
+      <div class="pos-grid">
+        <div class="pos-card">
+          <div class="pos-tokens" data-sent="a"></div>
+          <div class="sent">"dog bites man"</div>
+          <div class="mean">🐕 → 🦷 → 🧍  ouch for the man</div>
+        </div>
+        <div class="pos-card">
+          <div class="pos-tokens" data-sent="b"></div>
+          <div class="sent">"man bites dog"</div>
+          <div class="mean">🧍 → 🦷 → 🐕  a very strange headline</div>
+        </div>
+      </div>
+      <p class="stage-note"><span class="key cyan">THE FIX →</span> &nbsp;Each token embedding = <span class="amber">what the word is</span> + <span class="cyan">where it sits</span>. With positions added, attention can tell subject from object, first from last, near from far.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 06 · ATTENTION ============ -->
+<section id="attention" data-label="Attention">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">06 / THE BIG IDEA INSIDE</div>
+      <h2><span class="violet">Attention</span>: every word looks at the others</h2>
+      <p>Here's the breakthrough that made modern models work. To understand a word, the model lets it <span class="strong-ink">look at every other word</span> in the sentence and pull in what's relevant. The word <span class="mono">"it"</span> figures out what it refers to by paying <em>attention</em> to the right earlier word.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Self-attention · click a word to make it the "query"</span><button class="btn" data-replay="attn"><span class="ico"></span>Reset</button></div>
+      <div class="attn-stage">
+        <svg class="attn-svg" id="attnSvg" aria-hidden="true"></svg>
+        <div class="attn-tokens" id="attnTokens"></div>
+      </div>
+      <p class="attn-caption" id="attnCaption">Click <b>it</b> to see what it's really pointing at.</p>
+      <div class="qkv">
+        <div class="card"><h4><span class="badge">Q</span> Query</h4><p>The current word asks a question: <span class="tagq">"what here matters to me?"</span></p></div>
+        <div class="card"><h4><span class="badge">K</span> Keys</h4><p>Every other word offers a label — <span class="tagq">"here's what I'm about."</span></p></div>
+        <div class="card"><h4><span class="badge">V</span> Values</h4><p>Words that match get their <span class="tagq">meaning pulled in</span>, weighted by the match.</p></div>
+      </div>
+      <p class="stage-note"><span class="key violet">MANY AT ONCE →</span> &nbsp;A real model runs dozens of these attention "lenses" (called <span class="strong-ink">heads</span>) in parallel — one might track grammar, another who-did-what, another tone — then blends their findings.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">Someone told the model that "it" refers to "cat."</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Nobody labels this. It learned to route attention from data — and Q, K and V are three roles the <em>same</em> token plays, not three different words.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 07 · TRANSFORMER BLOCK ============ -->
+<section id="transformer" data-label="Transformer">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">07 / THE BUILDING BLOCK</div>
+      <h2>Stack attention into a <span class="amber">transformer</span></h2>
+      <p>Attention is one ingredient. Wrap it with a small "thinking" step (a <span class="rose">feed-forward</span> network), add two safety rails that keep the numbers stable (<span class="mono">residual</span> shortcuts and <span class="mono">layer-norm</span>), and you have one <span class="strong-ink">transformer block</span>. Then stack that same block dozens of times. Each layer refines the meaning a little more.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>One block, stacked N times</span></div>
+      <div class="tf-wrap">
+        <div class="tf-block" id="tfBlock">
+          <div class="tf-res">↑ out to next block</div>
+          <div class="tf-layer norm"><div class="t">Add &amp; Norm</div><div class="d">keep numbers steady</div></div>
+          <div class="tf-layer ff" data-lit="1"><div class="t">Feed-forward</div><div class="d">think about each token</div></div>
+          <div class="tf-layer norm"><div class="t">Add &amp; Norm</div><div class="d">+ residual shortcut</div></div>
+          <div class="tf-layer attn" data-lit="0"><div class="t">Self-attention</div><div class="d">tokens share context</div></div>
+          <div class="tf-res">↑ in from previous block</div>
+        </div>
+        <div>
+          <div class="stack-read"><span id="stackNum">12</span><small> layers deep</small></div>
+          <div class="stack-ctl">
+            <input type="range" id="stackRange" min="1" max="96" value="12" aria-label="Number of transformer layers">
+          </div>
+          <div class="stack-viz" id="stackViz"></div>
+          <p style="color:var(--muted);font-size:.86rem;margin-top:14px;text-align:center">Early layers catch grammar and simple patterns; deeper layers capture abstract meaning, logic and style. Big models stack <span class="amber">many dozens</span>.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 08 · GENERATION / TEMPERATURE ============ -->
+<section id="generation" data-label="Generation">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">08 / WRITING THE REPLY</div>
+      <h2>Sampling, and the <span class="violet">temperature</span> dial</h2>
+      <p>Back to that ranked list of next tokens. How does the model choose? A dial called <span class="strong-ink">temperature</span> reshapes the odds. Low temperature makes it play safe and pick the top choice almost every time; high temperature flattens the odds so it takes more risks — more creative, but more likely to wander.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Temperature · drag the slider</span></div>
+      <div class="temp-head">
+        <div class="temp-val" id="tempVal">0.7</div>
+        <div class="temp-tag" id="tempTag">balanced</div>
+      </div>
+      <input type="range" id="tempRange" min="0" max="150" value="70" aria-label="Sampling temperature">
+      <div id="tempCands" style="margin-top:22px"></div>
+      <div class="temp-out">The cat sat on the <span class="gen" id="tempOut">mat</span></div>
+      <p class="stage-note"><span class="key violet">TWO PHASES →</span> &nbsp;Reading your prompt (all tokens at once) is fast; writing the reply (one token, then the next, then the next) is the slow part. That's why long answers stream out gradually.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">The same prompt always gives the same answer.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Only at temperature 0. Once there's any randomness in the sampling, re-running the same prompt can land on different words — that's the variety, not a bug.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 09 · TRAINING ============ -->
+<section id="training" data-label="Training">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">09 / HOW IT LEARNS</div>
+      <h2>From raw text to a helpful <span class="green">assistant</span></h2>
+      <p>A model isn't programmed with facts — it's <span class="strong-ink">grown</span> in stages. First it reads a huge slice of the internet to learn language itself. Then it's taught to follow instructions. Finally, it's polished using human preferences so its answers are helpful and safe.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>The training pipeline</span></div>
+      <div class="stages">
+        <div class="stage-card">
+          <div class="n">Stage 1</div><h4>Pre-training</h4>
+          <p>Predict the next token across trillions of words of text. This is where raw knowledge of language, facts and patterns is soaked up. Slow, enormous, expensive.</p>
+          <span class="chip">the whole internet · months of compute</span>
+          <div class="flow-mark">→</div>
+        </div>
+        <div class="stage-card">
+          <div class="n">Stage 2</div><h4>Instruction tuning</h4>
+          <p>Show it thousands of example <span class="strong-ink">question → good answer</span> pairs so it learns to <em>respond</em> to requests, not just autocomplete text.</p>
+          <span class="chip">curated examples · learns to be useful</span>
+          <div class="flow-mark">→</div>
+        </div>
+        <div class="stage-card">
+          <div class="n">Stage 3</div><h4>Preference tuning</h4>
+          <p>Humans (and other models) rank answers; the model is nudged toward the ones people prefer. This is the <span class="mono">RLHF</span> step that shapes tone, honesty and safety.</p>
+          <span class="chip">human feedback · alignment</span>
+        </div>
+      </div>
+      <p class="stage-note"><span class="key green">TRAIN vs RUN →</span> &nbsp;All of that is <span class="strong-ink">training</span> — done once, ahead of time, to set the weights. When you chat, the weights are frozen: that's <span class="strong-ink">inference</span>, just running text through the finished machine.</p>
+      <div class="myth">
+        <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">It learns from your chats in real time.</span></div>
+        <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">The weights are frozen while you use it — your conversation isn't retraining the model. New knowledge only arrives when it's trained again, later.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · ARCHITECTURES ============ -->
+<section id="architectures" data-label="Architectures">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">10 / THREE SHAPES</div>
+      <h2>Not all transformers are built the <span class="violet">same</span></h2>
+      <p>The same building block gets wired up in three classic ways, depending on the job. The difference comes down to <span class="strong-ink">who's allowed to look at whom</span> — the attention pattern. Toggle between them and watch the grid: a lit cell means "this token can attend to that one."</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>Attention pattern by architecture</span></div>
+      <div class="arch-ctl" role="group" aria-label="Architecture">
+        <button class="arch-seg active" data-arch="dec">Decoder-only · GPT / Claude</button>
+        <button class="arch-seg" data-arch="enc">Encoder-only · BERT</button>
+        <button class="arch-seg" data-arch="encdec">Encoder–Decoder · T5</button>
+      </div>
+      <div class="arch-body">
+        <div>
+          <div class="mask-grid" id="maskGrid"></div>
+          <div class="mask-cap" id="maskCap">each row = a token · lit = it may look there</div>
+        </div>
+        <div class="arch-info" id="archInfo"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · SCALE & CONTEXT ============ -->
+<section id="scale" data-label="Scale">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">11 / BIGGER & LONGER</div>
+      <h2>What "more powerful" usually means</h2>
+      <p>Progress has largely come from turning up three dials together. More <span class="rose">parameters</span>, more <span class="green">training data</span>, and a longer <span class="cyan">context window</span> — how much text the model can hold in mind at once when it answers you.</p>
+    </div>
+    <div class="stage reveal">
+      <div class="stage-label"><span>The dials that grew</span><button class="btn" data-replay="scale"><span class="ico"></span>Replay</button></div>
+      <div class="scale-row"><span class="lab rose">Parameters</span><div class="scale-track"><div class="scale-fill" data-w="94" id="sc1"></div></div><span class="num" id="scn1">0</span></div>
+      <div class="scale-row"><span class="lab green">Training data</span><div class="scale-track"><div class="scale-fill" data-w="88" id="sc2"></div></div><span class="num" id="scn2">0</span></div>
+      <div class="scale-row"><span class="lab cyan">Context window</span><div class="scale-track"><div class="scale-fill" data-w="80" id="sc3"></div></div><span class="num" id="scn3">0</span></div>
+      <p class="stage-note"><span class="key cyan">CONTEXT WINDOW →</span> &nbsp;This is why a model can "forget" the start of a very long chat: everything it's considering — your prompt, the documents, its own reply so far — has to fit inside that token budget.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · RECAP ============ -->
+<section id="recap" data-label="Recap" style="border-bottom:none">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="num">12 / THE WHOLE PICTURE</div>
+      <h2>Every word, in plain language</h2>
+      <p>You've now seen each piece move. Here's the quick glossary to keep — the jargon, decoded.</p>
+    </div>
+    <div class="recap reveal">
+      <div class="rrow"><div class="rq">Token</div><div class="ra">A chunk of text — a short word or word-piece. The <b>unit</b> everything is counted in.</div></div>
+      <div class="rrow"><div class="rq">Embedding</div><div class="ra">A token turned into a list of numbers (a vector) that places its <b>meaning</b> as a point in space.</div></div>
+      <div class="rrow"><div class="rq">Weights / parameters</div><div class="ra">The billions of tunable knobs learned during training. Together they <b>are</b> the model.</div></div>
+      <div class="rrow"><div class="rq">Attention</div><div class="ra">The mechanism that lets each token <b>look at other tokens</b> and pull in what's relevant.</div></div>
+      <div class="rrow"><div class="rq">Transformer block</div><div class="ra">Attention + a feed-forward step + stabilisers, <b>stacked many times</b> to build understanding.</div></div>
+      <div class="rrow"><div class="rq">Positional encoding</div><div class="ra">Extra info added to each token so the model knows its <b>order</b> in the sequence.</div></div>
+      <div class="rrow"><div class="rq">Autoregressive</div><div class="ra">Generating text <b>one token at a time</b>, feeding each new one back in to get the next.</div></div>
+      <div class="rrow"><div class="rq">Temperature</div><div class="ra">The dial that trades <b>safe &amp; predictable</b> against <b>creative &amp; risky</b> when picking tokens.</div></div>
+      <div class="rrow"><div class="rq">Pre-training → fine-tuning → RLHF</div><div class="ra">Learn language → learn to follow instructions → learn human <b>preferences</b>.</div></div>
+      <div class="rrow"><div class="rq">Encoder / decoder</div><div class="ra">Encoder = read &amp; <b>understand</b> (looks both ways). Decoder = <b>generate</b> (looks only backward).</div></div>
+      <div class="rrow"><div class="rq">Context window</div><div class="ra">The maximum number of tokens the model can <b>consider at once</b> when answering.</div></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="mono" style="letter-spacing:.14em;color:var(--muted)">END OF COURSE</div>
+    <div>A visual, beginner's introduction to large language models and transformers. Numbers and diagrams are simplified for intuition — real models differ in the details, but the shape of the ideas is exactly this.</div>
+    <div style="margin-top:6px"><a href="/">← back to tbash.cc</a></div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (s,el)=> (el||document).querySelector(s);
+  const $$ = (s,el)=> Array.from((el||document).querySelectorAll(s));
+
+  /* ---------- progress bar ---------- */
+  const pf = $('#progressFill');
+  function onScroll(){
+    const h = document.documentElement;
+    const max = h.scrollHeight - h.clientHeight;
+    pf.style.width = (max>0 ? (h.scrollTop/max*100) : 0) + '%';
+  }
+  document.addEventListener('scroll', onScroll, {passive:true}); onScroll();
+
+  /* ---------- chapter rail ---------- */
+  const secs = $$('section[data-label]');
+  const rail = $('#rail');
+  secs.forEach(s=>{
+    const a = document.createElement('a');
+    a.href = '#'+s.id;
+    a.innerHTML = '<span class="lbl">'+s.dataset.label+'</span>';
+    a.setAttribute('aria-label', s.dataset.label);
+    rail.appendChild(a);
+  });
+  const railLinks = $$('a', rail);
+  const railObs = new IntersectionObserver((es)=>{
+    es.forEach(e=>{
+      if(e.isIntersecting){
+        const i = secs.indexOf(e.target);
+        railLinks.forEach((l,j)=>l.classList.toggle('on', j===i));
+      }
+    });
+  },{threshold:.5});
+  secs.forEach(s=>railObs.observe(s));
+
+  /* ---------- hero ambient ---------- */
+  (function(){
+    const host = $('#ambient'); if(!host||reduce) return;
+    const words = ['token','embedding','attention','query','key','value','weights','softmax','vector','transformer','decode','layer'];
+    for(let i=0;i<9;i++){
+      const c=document.createElement('div'); c.className='chip-drift';
+      c.textContent=words[i%words.length];
+      c.style.top=(8+Math.random()*84)+'%';
+      c.style.animationDuration=(13+Math.random()*12)+'s';
+      c.style.animationDelay=(-Math.random()*20)+'s';
+      c.style.fontSize=(11+Math.random()*3)+'px';
+      host.appendChild(c);
+    }
+  })();
+
+  /* ---------- reveal ---------- */
+  const revObs=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting)e.target.classList.add('in');});},{threshold:.14});
+  $$('.reveal').forEach(el=>revObs.observe(el));
+
+  /* ========== 01 predict next token ========== */
+  const cands=[
+    {w:'mat',   p:61, top:true},
+    {w:'floor', p:15},
+    {w:'sofa',  p:11},
+    {w:'rug',   p:7},
+    {w:'windowsill', p:4},
+    {w:'roof',  p:2}
+  ];
+  const candList=$('#candList'), predBlank=$('#predBlank');
+  function buildPredict(){
+    candList.innerHTML='';
+    cands.forEach(c=>{
+      const row=document.createElement('div');
+      row.className='cand'+(c.top?' top':'');
+      row.innerHTML='<div class="w">"'+c.w+'"</div><div class="bar-track"><div class="bar"></div></div><div class="pct">'+c.p+'%</div>';
+      candList.appendChild(row);
+    });
+    predBlank.textContent='▁▁▁'; predBlank.classList.remove('done');
+  }
+  function runPredict(){
+    buildPredict();
+    const bars=$$('.cand .bar', candList);
+    requestAnimationFrame(()=>{ bars.forEach((b,i)=>{ b.style.width=cands[i].p+'%'; }); });
+    setTimeout(()=>{ predBlank.textContent='mat'; predBlank.classList.add('done'); }, reduce?0:1250);
+  }
+
+  /* ========== 02 tokenizer ========== */
+  const toks=[
+    {t:'The',id:'791'},{t:'cat',id:'8415'},{t:'sat',id:'7731'},{t:'on',id:'389'},
+    {t:'the',id:'279'},{t:'mat',id:'2450'},{t:',',id:'11'},
+    {t:'content',id:'1834'},{t:'edly',id:'23050'},{t:'.',id:'13'}
+  ];
+  const tokLine=$('#tokLine'); let tokTimers=[];
+  function runTok(){
+    tokTimers.forEach(clearTimeout); tokTimers=[]; tokLine.innerHTML='';
+    toks.forEach((tk,i)=>{
+      const el=document.createElement('span');
+      el.className='tok';
+      el.innerHTML=tk.t+'<span class="tok-id">'+tk.id+'</span>';
+      el.style.opacity='0'; el.style.transform='translateY(8px)';
+      tokLine.appendChild(el);
+      tokTimers.push(setTimeout(()=>{
+        el.style.transition='.35s'; el.style.opacity='1'; el.style.transform='none';
+        el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),450);
+      }, reduce?0:150*i));
+    });
+  }
+
+  /* ========== 03 embeddings scatter ========== */
+  // clusters: animals, places, royalty  (x,y in %)
+  const words=[
+    {w:'cat',x:24,y:30,g:'a'},{w:'kitten',x:16,y:40,g:'a'},{w:'dog',x:30,y:44,g:'a'},{w:'puppy',x:21,y:54,g:'a'},
+    {w:'Paris',x:74,y:26,g:'b'},{w:'France',x:83,y:34,g:'b'},{w:'Tokyo',x:76,y:44,g:'b'},{w:'Japan',x:86,y:52,g:'b'},
+    {w:'king',x:42,y:74,g:'c'},{w:'queen',x:54,y:80,g:'c'},{w:'man',x:36,y:86,g:'c'},{w:'woman',x:50,y:92,g:'c'}
+  ];
+  const scatter=$('#scatter');
+  function nearest(word,k){
+    return words.filter(o=>o!==word).map(o=>({o,d:Math.hypot(o.x-word.x,o.y-word.y)})).sort((a,b)=>a.d-b.d).slice(0,k).map(x=>x.o.w);
+  }
+  function buildScatter(){
+    scatter.innerHTML='';
+    words.forEach(o=>{
+      const d=document.createElement('div'); d.className='dot'; d.textContent=o.w;
+      d.style.left=o.x+'%'; d.style.top=o.y+'%'; d.dataset.w=o.w;
+      d.addEventListener('mouseenter',()=>hoverWord(o));
+      d.addEventListener('mouseleave',clearScatter);
+      scatter.appendChild(d);
+    });
+  }
+  function hoverWord(o){
+    const near=nearest(o,3);
+    $$('.dot',scatter).forEach(d=>{
+      d.classList.remove('hot','near','dim');
+      if(d.dataset.w===o.w) d.classList.add('hot');
+      else if(near.includes(d.dataset.w)) d.classList.add('near');
+      else d.classList.add('dim');
+    });
+  }
+  function clearScatter(){ $$('.dot',scatter).forEach(d=>d.classList.remove('hot','near','dim')); }
+
+  /* ========== 04 weights / params ========== */
+  const paramVal=$('#paramVal'), paramLbl=$('#paramLbl'), gridDots=$('#gridDots');
+  const scales={
+    toy:     {v:'3',    lbl:'weights in this toy net',   dots:6,  density:.4},
+    small:   {v:'1.2M', lbl:'a small language model',    dots:220,density:.7},
+    gpt2:    {v:'1.5B', lbl:'GPT-2 (2019)',              dots:520,density:.9},
+    frontier:{v:'500B+',lbl:'a frontier model today',    dots:900,density:1}
+  };
+  function setParams(key){
+    const s=scales[key];
+    paramVal.innerHTML=s.v+'<small></small>'; paramLbl.textContent=s.lbl;
+    gridDots.innerHTML='';
+    const n=reduce?Math.min(s.dots,120):s.dots;
+    for(let i=0;i<n;i++){
+      const dt=document.createElement('span');
+      const sz=2+Math.random()*3;
+      dt.style.cssText='position:absolute;width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:var(--rose);'+
+        'left:'+(Math.random()*100)+'%;top:'+(Math.random()*100)+'%;opacity:'+(0.25+Math.random()*0.6*s.density)+';';
+      gridDots.appendChild(dt);
+    }
+    $$('#scaleBtns .seg').forEach(b=>b.classList.toggle('active',b.dataset.p===key));
+  }
+  $$('#scaleBtns .seg').forEach(b=>b.addEventListener('click',()=>setParams(b.dataset.p)));
+
+  /* ========== 05 attention ========== */
+  const aWords=['The','cat','sat','on','the','mat','because','it','was','tired'];
+  // attention weight tables: query index -> {targetIndex: weight}
+  const aWeights={
+    7:{1:0.72,2:0.12,5:0.10,8:0.06},          // "it" -> cat (strong)
+    2:{1:0.55,5:0.28,3:0.09,0:0.08},          // "sat" -> cat, mat
+    5:{2:0.34,3:0.22,4:0.20,1:0.14},          // "mat" -> sat/on/the/cat
+    9:{1:0.46,7:0.30,8:0.14,2:0.10},          // "tired" -> cat, it
+    1:{2:0.4,5:0.24,0:0.2,7:0.16}             // "cat" -> sat/mat
+  };
+  const aCaptions={
+    7:'<b>"it"</b> looks back and points at <b>cat</b> — mats don\'t get tired.',
+    2:'<b>"sat"</b> pulls in <b>cat</b> (who sat) and <b>mat</b> (where).',
+    5:'<b>"mat"</b> gathers the words that describe the action around it.',
+    9:'<b>"tired"</b> attaches to <b>cat</b> — the thing that is tired.',
+    1:'<b>"cat"</b> links forward to what it does: <b>sat</b> on the <b>mat</b>.'
+  };
+  const attnTokens=$('#attnTokens'), attnSvg=$('#attnSvg'), attnCaption=$('#attnCaption');
+  let curQuery=null;
+  function buildAttn(){
+    attnTokens.innerHTML='';
+    aWords.forEach((w,i)=>{
+      const b=document.createElement('button');
+      b.className='atok'; b.type='button';
+      b.innerHTML=w+'<span class="wbar"></span>';
+      b.dataset.i=i;
+      b.addEventListener('click',()=>selectQuery(i));
+      attnTokens.appendChild(b);
+    });
+  }
+  function selectQuery(i){
+    if(!aWeights[i]){ i = 7; } // default to a word that has a table
+    curQuery=i;
+    const btns=$$('.atok',attnTokens);
+    const wmap=aWeights[i]||{};
+    btns.forEach((b,j)=>{
+      b.classList.toggle('query', j===i);
+      const bar=$('.wbar',b);
+      const wt=wmap[j]||0;
+      bar.style.width=(j===i?0:wt*100)+'%';
+      b.style.opacity = (j===i || wt>0 || Object.keys(wmap).length===0) ? '1' : '.55';
+    });
+    attnCaption.innerHTML = aCaptions[i] || 'This word attends to its most relevant neighbours.';
+    drawArcs(i,wmap);
+  }
+  function tokenCenterTop(el, host){
+    const r=el.getBoundingClientRect(), hr=host.getBoundingClientRect();
+    return {x:r.left-hr.left+r.width/2, y:r.top-hr.top};
+  }
+  function drawArcs(i,wmap){
+    const host=attnSvg.parentElement;
+    const hr=host.getBoundingClientRect();
+    attnSvg.setAttribute('viewBox','0 0 '+hr.width+' '+hr.height);
+    attnSvg.innerHTML='';
+    if(reduce) return;
+    const btns=$$('.atok',attnTokens);
+    if(!btns[i]) return;
+    const q=tokenCenterTop(btns[i],host);
+    Object.keys(wmap).forEach(k=>{
+      const j=+k, wt=wmap[k]; if(j===i) return;
+      const t=tokenCenterTop(btns[j],host);
+      const midx=(q.x+t.x)/2;
+      const lift=Math.min(70, 26+Math.abs(q.x-t.x)*0.28);
+      const cy=Math.min(q.y,t.y)-lift;
+      const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+      path.setAttribute('d','M '+q.x+' '+q.y+' Q '+midx+' '+cy+' '+t.x+' '+t.y);
+      path.setAttribute('fill','none');
+      path.setAttribute('stroke','var(--violet)');
+      path.setAttribute('stroke-width',(1+wt*6).toFixed(2));
+      path.setAttribute('stroke-linecap','round');
+      path.setAttribute('opacity',(0.25+wt*0.65).toFixed(2));
+      attnSvg.appendChild(path);
+    });
+  }
+  function resetAttn(){ buildAttn(); attnSvg.innerHTML=''; attnCaption.innerHTML='Click <b>it</b> to see what it\'s really pointing at.'; $$('.atok',attnTokens).forEach(b=>{b.style.opacity='1';}); curQuery=null; }
+  window.addEventListener('resize',()=>{ if(curQuery!=null) drawArcs(curQuery, aWeights[curQuery]||{}); });
+
+  /* ========== 06 transformer stack ========== */
+  const stackRange=$('#stackRange'), stackNum=$('#stackNum'), stackViz=$('#stackViz');
+  function setStack(n){
+    stackNum.textContent=n;
+    stackViz.innerHTML='';
+    const show=Math.min(n,48);
+    for(let i=0;i<show;i++){ const s=document.createElement('div'); s.className='stack-slab'; stackViz.appendChild(s); }
+  }
+  stackRange.addEventListener('input',()=>setStack(+stackRange.value));
+  // small ambient "flow" through the block
+  let tfFlow=null;
+  function startTf(){
+    if(reduce) return;
+    const layers=[$('.tf-layer.attn'),$('.tf-layer.ff')];
+    let k=0;
+    stopTf();
+    tfFlow=setInterval(()=>{
+      layers.forEach(l=>l&&l.classList.remove('lit'));
+      const l=layers[k%2]; if(l) l.classList.add('lit'); k++;
+    },900);
+  }
+  function stopTf(){ if(tfFlow) clearInterval(tfFlow); tfFlow=null; }
+
+  /* ========== 07 positions ========== */
+  const posSets={a:['dog','bites','man'], b:['man','bites','dog']};
+  function buildPos(){
+    $$('.pos-tokens').forEach(host=>{
+      const set=posSets[host.dataset.sent]; host.innerHTML='';
+      set.forEach((w,i)=>{
+        const el=document.createElement('span'); el.className='ptok';
+        el.innerHTML=w+'<span class="pos">'+i+'</span>'; host.appendChild(el);
+      });
+    });
+  }
+  let posShown=false;
+  $('#posToggle').addEventListener('click',()=>{
+    posShown=!posShown;
+    $$('.ptok').forEach(p=>p.classList.toggle('showpos',posShown));
+    $('#posToggle').textContent = posShown?'Hide positions':'Show positions';
+  });
+
+  /* ========== 08 temperature ========== */
+  const tLogits=[
+    {w:'mat',   z:3.4},
+    {w:'floor', z:2.1},
+    {w:'sofa',  z:1.8},
+    {w:'rug',   z:1.4},
+    {w:'couch', z:1.0},
+    {w:'moon',  z:0.2},
+    {w:'idea',  z:-0.4}
+  ];
+  const tempRange=$('#tempRange'), tempVal=$('#tempVal'), tempTag=$('#tempTag'), tempCands=$('#tempCands'), tempOut=$('#tempOut');
+  function softmax(zs,T){
+    const t=Math.max(0.05,T);
+    const m=Math.max(...zs);
+    const ex=zs.map(z=>Math.exp((z-m)/t));
+    const s=ex.reduce((a,b)=>a+b,0);
+    return ex.map(e=>e/s);
+  }
+  function buildTempRows(){
+    tempCands.innerHTML='';
+    tLogits.forEach(c=>{
+      const row=document.createElement('div'); row.className='cand'; row.dataset.w=c.w;
+      row.innerHTML='<div class="w">"'+c.w+'"</div><div class="bar-track"><div class="bar"></div></div><div class="pct">0%</div>';
+      tempCands.appendChild(row);
+    });
+  }
+  function renderTemp(){
+    const T=+tempRange.value/100;
+    tempVal.textContent=T.toFixed(2);
+    tempTag.textContent = T<0.35?'careful & predictable' : T<0.9?'balanced' : T<1.25?'creative' : 'wild & random';
+    const ps=softmax(tLogits.map(c=>c.z),T);
+    const rows=$$('.cand',tempCands);
+    let topI=0; ps.forEach((p,i)=>{if(p>ps[topI])topI=i;});
+    rows.forEach((row,i)=>{
+      const bar=$('.bar',row), pct=$('.pct',row);
+      bar.style.width=(ps[i]*100).toFixed(1)+'%';
+      pct.textContent=Math.round(ps[i]*100)+'%';
+      row.classList.toggle('top',i===topI);
+    });
+    // "sample": at low T take top; higher T, more likely to show a lower one
+    let pickI=topI;
+    if(T>0.9){
+      const r=Math.random();
+      let acc=0; for(let i=0;i<ps.length;i++){acc+=ps[i]; if(r<=acc){pickI=i;break;}}
+    }
+    tempOut.textContent=tLogits[pickI].w;
+  }
+  tempRange.addEventListener('input',renderTemp);
+
+  /* ========== 10 architectures ========== */
+  const archData={
+    dec:{
+      title:'Decoder-only', flow:'input ▸ [ causal transformer ] ▸ next token',
+      mask:(i,j)=> j<=i,
+      cap:'lower triangle · each token sees only itself + the past',
+      desc:'Every token may look <b>backward</b> but never forward — so the model can generate text left-to-right, one token at a time. This is the shape behind <b>GPT, Claude, Llama, Gemini</b> and most chat models.',
+      pills:['Best at: <b>generating text</b>','Reads: <b>past only (causal)</b>','Examples: <b>GPT · Claude · Llama</b>']
+    },
+    enc:{
+      title:'Encoder-only', flow:'input ▸ [ bidirectional transformer ] ▸ understanding',
+      mask:(i,j)=> true,
+      cap:'full grid · every token sees every other token',
+      desc:'Every token can look <b>both ways</b> at the entire input at once. Great for <b>understanding</b> a fixed piece of text — classification, search, sentiment — but it doesn\'t generate fluent text. The classic example is <b>BERT</b>.',
+      pills:['Best at: <b>understanding / classifying</b>','Reads: <b>both directions</b>','Examples: <b>BERT · embeddings</b>']
+    },
+    encdec:{
+      title:'Encoder–Decoder', flow:'input ▸ [ encoder ] ▸ [ decoder ] ▸ output',
+      mask:(i,j)=> j<=i,
+      cap:'encoder reads all; decoder writes causally + peeks at the encoder',
+      desc:'Two stacks: an <b>encoder</b> reads and understands the whole input both ways, then a <b>decoder</b> generates the output step by step while attending back to what the encoder understood. Ideal for <b>turning one sequence into another</b> — translation, summarisation. Seen in <b>T5</b> and the original transformer.',
+      pills:['Best at: <b>sequence → sequence</b>','Reads: <b>encode both ways, decode causal</b>','Examples: <b>T5 · original Transformer</b>']
+    }
+  };
+  const maskGrid=$('#maskGrid'), maskCap=$('#maskCap'), archInfo=$('#archInfo');
+  const MASK_N=6;
+  function buildMaskShell(){
+    maskGrid.style.gridTemplateColumns='repeat('+MASK_N+',1fr)';
+    maskGrid.innerHTML='';
+    for(let i=0;i<MASK_N;i++)for(let j=0;j<MASK_N;j++){
+      const c=document.createElement('div'); c.className='mcell'; c.dataset.i=i; c.dataset.j=j;
+      maskGrid.appendChild(c);
+    }
+  }
+  function setArch(key){
+    const d=archData[key];
+    $$('.mcell',maskGrid).forEach(c=>{
+      const on=d.mask(+c.dataset.i,+c.dataset.j);
+      c.classList.toggle('on',on);
+    });
+    maskCap.textContent=d.cap;
+    archInfo.innerHTML='<h4>'+d.title+'</h4><div class="flow">'+d.flow+'</div><p>'+d.desc+'</p><div class="row">'+
+      d.pills.map(p=>'<span class="pill">'+p+'</span>').join('')+'</div>';
+    $$('.arch-seg').forEach(b=>b.classList.toggle('active',b.dataset.arch===key));
+  }
+  $$('.arch-seg').forEach(b=>b.addEventListener('click',()=>setArch(b.dataset.arch)));
+
+  /* ========== 11 scale bars ========== */
+  const scaleEls=[
+    {bar:$('#sc1'),num:$('#scn1'),to:'500B+ params'},
+    {bar:$('#sc2'),num:$('#scn2'),to:'~15T tokens'},
+    {bar:$('#sc3'),num:$('#scn3'),to:'1M tokens'}
+  ];
+  function runScale(){
+    scaleEls.forEach(e=>{ e.bar.style.width='0'; e.num.textContent='0'; });
+    requestAnimationFrame(()=>{ scaleEls.forEach(e=>{ e.bar.style.width=e.bar.dataset.w+'%'; }); });
+    scaleEls.forEach(e=>{ setTimeout(()=>{ e.num.textContent=e.to; }, reduce?0:900); });
+  }
+
+  /* ---------- section-triggered animations ---------- */
+  const runners={
+    idea:runPredict, tokens:runTok, generation:renderTemp, scale:runScale
+  };
+  const secObs=new IntersectionObserver((es)=>{
+    es.forEach(e=>{
+      const id=e.target.id;
+      if(e.isIntersecting){
+        if(runners[id]) runners[id]();
+        if(id==='attention'){ if(curQuery==null) resetAttn(); }
+        if(id==='transformer') startTf();
+      } else {
+        if(id==='transformer') stopTf();
+      }
+    });
+  },{threshold:.32});
+  ['idea','tokens','generation','scale','attention','transformer'].forEach(id=>{const el=$('#'+id); if(el)secObs.observe(el);});
+
+  /* ---------- replay buttons ---------- */
+  $$('[data-replay]').forEach(b=>b.addEventListener('click',()=>{
+    const k=b.dataset.replay;
+    if(k==='predict')runPredict();
+    if(k==='tok')runTok();
+    if(k==='attn')resetAttn();
+    if(k==='scale')runScale();
+  }));
+
+  /* ---------- init everything ---------- */
+  buildPredict();
+  buildScatter();
+  setParams('toy');
+  buildAttn();
+  setStack(12);
+  buildPos();
+  buildTempRows(); renderTemp();
+  buildMaskShell(); setArch('dec');
+})();
+</script>
+</body>
+</html>
