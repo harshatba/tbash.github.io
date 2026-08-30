@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Feed-Forward Step — LLM Visual Course</title>
+<meta name="description" content="Attention mixes across tokens; the FFN transforms each token alone. Watch lesson 4's neuron, stacked into a layer, eat a real post-attention vector: 8 tanh hidden units then 4 linear outputs, computed live.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="course.css">
+<style>
+  /* ---- page-specific widget CSS only (shared stuff lives in course.css) ---- */
+
+  .ffn-flow{display:flex;flex-direction:column;gap:8px}
+
+  .layer-lab{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted-2);display:flex;align-items:center;gap:10px;margin:16px 0 4px}
+  .layer-lab::after{content:"";flex:1;height:1px;background:var(--line)}
+  .layer-lab .cnt{color:var(--muted);letter-spacing:.04em;text-transform:none}
+
+  /* input vector (cyan = vector) + optional nudge sliders */
+  .invec{border:1px solid rgba(67,214,200,.28);border-radius:12px;background:rgba(67,214,200,.05);padding:14px 16px}
+  .invec .iv-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:10px}
+  .iv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:560px){.iv-grid{grid-template-columns:repeat(2,1fr)}}
+  .iv-cell{background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;text-align:center}
+  .iv-cell .lb{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-2)}
+  .iv-cell .nm{font-family:var(--mono);font-size:1.25rem;font-weight:600;color:var(--cyan);margin:5px 0 8px}
+  .iv-cell input[type=range]{height:20px}
+  .iv-hint{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:10px;line-height:1.5}
+
+  /* weights panel (rose = weights) */
+  .wpanel{border:1px solid rgba(255,122,138,.26);border-radius:12px;background:rgba(255,122,138,.045);padding:11px 15px;margin-top:14px}
+  .wpanel .wp-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--rose);margin-bottom:4px}
+  .wpanel p{font-family:var(--mono);font-size:11.5px;color:var(--muted);line-height:1.55;margin:0}
+  .wpanel b{color:var(--rose);font-weight:600}
+
+  /* hidden layer — 8 neuron tiles (lesson-4 neuron, stacked) */
+  .hgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  @media(max-width:760px){.hgrid{grid-template-columns:1fr}}
+  .hn{background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:11px 13px;position:relative;overflow:hidden}
+  .hn-h{display:flex;align-items:baseline;gap:9px;margin-bottom:8px}
+  .hn-id{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink);
+    background:var(--panel-2);border:1px solid var(--line-strong);border-radius:6px;padding:2px 8px}
+  .hn-tag{font-family:var(--body);font-size:12px;color:var(--muted-2);font-style:italic}
+  .hn-math{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow-x:auto;padding-bottom:2px}
+  .hn-math .wt{color:var(--rose)}
+  .hn-math .pre{color:var(--ink);font-weight:600}
+  .hn-act{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;margin-top:8px}
+  .hn-fn{font-family:var(--mono);font-size:11.5px;color:var(--muted-2)}
+  .hn-bar{position:relative;height:14px;background:var(--bg);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+  .hn-bar .mid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-strong)}
+  .hn-bar i{position:absolute;top:1px;bottom:1px;background:var(--amber);border-radius:3px;transition:width .35s cubic-bezier(.4,0,.2,1),left .35s cubic-bezier(.4,0,.2,1)}
+  .hn-bar i.neg{background:var(--rose)}
+  .hn-out{font-family:var(--mono);font-size:1.05rem;font-weight:600;color:var(--amber);min-width:52px;text-align:right}
+  .hn-out.neg{color:var(--rose)}
+  .hn.hot{border-color:rgba(255,180,84,.5);background:linear-gradient(180deg,rgba(255,180,84,.09),var(--bg-2))}
+  .hn.hot .hn-id{color:var(--amber);border-color:rgba(255,180,84,.4)}
+  .hn .hot-flag{position:absolute;top:9px;right:11px;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--amber);opacity:0}
+  .hn.hot .hot-flag{opacity:1;animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+  @media(prefers-reduced-motion:reduce){.hn.hot .hot-flag{animation:none;opacity:.9}.hn-bar i{transition:none}}
+
+  /* output layer — 4 linear neurons */
+  .noact{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--rose);background:rgba(255,122,138,.12);border:1px solid rgba(255,122,138,.3);border-radius:6px;padding:2px 8px;margin-left:8px}
+  .ogrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.ogrid{grid-template-columns:1fr}}
+  .on{background:var(--bg-2);border:1px solid var(--line);border-radius:11px;padding:11px 13px}
+  .on-h{display:flex;align-items:baseline;gap:9px;margin-bottom:7px}
+  .on-id{font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--cyan);
+    background:rgba(67,214,200,.1);border:1px solid rgba(67,214,200,.3);border-radius:6px;padding:2px 8px}
+  .on-tag{font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-2)}
+  .on-math{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap;overflow-x:auto}
+  .on-math .wt{color:var(--rose)}
+  .on-math .hv{color:var(--amber)}
+  .on-math .res{color:var(--cyan);font-weight:600}
+
+  /* delta vector + residual add-back */
+  .dvec{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  @media(max-width:560px){.dvec{grid-template-columns:repeat(2,1fr)}}
+  .dcell{background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;text-align:center}
+  .dcell .lb{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted-2)}
+  .dcell .nm{font-family:var(--mono);font-size:1.2rem;font-weight:600;color:var(--cyan);margin-top:5px}
+  .dcell.up{border-color:rgba(255,180,84,.4);background:rgba(255,180,84,.06)}
+  .dcell.up .nm{color:var(--amber)}
+  .dcell.dn{border-color:rgba(255,122,138,.35);background:rgba(255,122,138,.05)}
+  .dcell.dn .nm{color:var(--rose)}
+
+  .resid-line{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:16px;
+    background:var(--bg-2);border:1px solid var(--line);border-radius:9px;padding:12px 14px;overflow-x:auto;line-height:1.9}
+  .resid-line .op{color:var(--violet)}
+  .resid-line .old{color:var(--muted-2)}
+  .resid-line .new{color:var(--cyan);font-weight:600}
+  .resid-line .lab{color:var(--muted-2)}
+
+  .ffn-read{margin-top:16px;font-size:.98rem;color:var(--ink);line-height:1.65}
+  .ffn-read .amber{color:var(--amber)}.ffn-read .cyan{color:var(--cyan)}.ffn-read .rose{color:var(--rose)}
+
+  .formula{font-family:var(--mono);font-size:12.5px;color:var(--muted);text-align:center;
+    background:rgba(11,16,32,.5);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:4px 0 6px;line-height:1.9;overflow-x:auto}
+  .formula .op{color:var(--violet)}
+  .formula .rose{color:var(--rose)}
+  .formula .cyan{color:var(--cyan)}
+  .formula .amber{color:var(--amber)}
+
+  .indep-note{font-family:var(--mono);font-size:11px;color:var(--muted-2);margin-top:14px;line-height:1.55;
+    border-left:2px solid var(--line-strong);padding-left:12px}
+  .indep-note b{color:var(--violet)}
+
+  .hood table{border-collapse:collapse;font-family:var(--mono);font-size:.82em;margin:10px 0;width:100%}
+  .hood table td,.hood table th{border:1px solid var(--line);padding:5px 9px;text-align:right;color:var(--muted)}
+  .hood table th{color:var(--muted-2);font-weight:500}
+  .hood table td:first-child,.hood table th:first-child{text-align:left;color:var(--amber)}
+  .hood .wrapx{overflow-x:auto}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="fill"></div></div>
+<a class="home-link" href="index.html">cd .. / course</a>
+
+<!-- ============ HEADER ============ -->
+<header class="lesson-head wrap reveal">
+  <nav class="crumbs">
+    <a href="index.html">Course</a><span class="sep">/</span>
+    <a href="index.html#part1">Part 1 · How LLMs Work</a><span class="sep">/</span>
+    <span class="here">09 · The feed-forward step</span>
+  </nav>
+  <span class="eyebrow">Part 1 · Lesson 9/15</span>
+  <h1>The <span class="rose">feed-forward</span> step: each token thinks alone</h1>
+  <p class="lede">Attention was the step where tokens looked at <i>each other</i>. The FFN is the opposite: each token's vector runs through a little neural network <b class="strong-ink">on its own</b> — it's lesson 4's neuron, finally eating a real post-attention vector.</p>
+  <div class="pill-row">
+    <span class="meta-pill">⏱ <b>~5 min</b></span>
+    <span class="meta-pill">🎚 <b>the net, computed live</b></span>
+    <span class="meta-pill">math: <b>some</b></span>
+  </div>
+</header>
+
+<!-- ============ SETUP PROSE ============ -->
+<section class="block wrap reveal">
+  <div class="prose">
+    <p>Attention mixed information <span class="strong-ink">across</span> tokens: <code class="inl">it</code>'s vector became a blend of <code class="inl">cat</code>, <code class="inl">tired</code>, and the rest. The feed-forward network does the opposite job — it transforms <span class="strong-ink">each token's vector by itself</span>, with no other token involved.</p>
+    <p>That little network is just <a href="neuron.html">lesson 4's neuron</a>, stacked into layers: a hidden layer of neurons <code class="inl">hidden = tanh(W1·v + b1)</code>, then an output layer <code class="inl">out = W2·hidden + b2</code>. Same multiply-add-squish — now chewing on the real residual vector <code class="inl">[1.42, 0.34, 0.45, 0.40]</code> that <code class="inl">it</code> carried out of lesson 8.</p>
+    <p>This is where the model <span class="strong-ink">transforms</span> what attention gathered — sharpening some features, trimming noise — one token at a time. And its output is <span class="strong-ink">added back</span> too (residual, lesson 8): <code class="inl">v + FFN(v)</code>.</p>
+  </div>
+</section>
+
+<!-- ============ INTERACTIVE STAGE ============ -->
+<section class="block wrap reveal">
+  <div class="stage">
+    <div class="stage-label"><span>The FFN · 4 → 8 → 4, computed live</span><button class="btn play" id="reset"><span class="ico"></span>Reset input</button></div>
+
+    <div class="formula">
+      <span class="rose">hidden</span> = tanh( <span class="rose">W1</span><span class="op">·</span><span class="cyan">v</span> + <span class="rose">b1</span> ) &nbsp;→&nbsp;
+      <span class="cyan">FFN&nbsp;out</span> = <span class="rose">W2</span><span class="op">·</span><span class="rose">hidden</span> + <span class="rose">b2</span> &nbsp;→&nbsp;
+      residual: <span class="cyan">v</span> + <span class="cyan">FFN&nbsp;out</span>
+    </div>
+
+    <div class="ffn-flow">
+
+      <!-- INPUT -->
+      <div class="layer-lab">Input vector <span class="cnt">— <code class="inl" style="font-size:.85em">it</code>'s post-attention residual (lesson 8)</span></div>
+      <div class="invec">
+        <div class="iv-k">v — the token vector (cyan)</div>
+        <div class="iv-grid" id="ivGrid"></div>
+        <div class="iv-hint">Nudge a slider and the <b>entire</b> network below recomputes — every hidden and output number moves. Reset to return to the documented <code class="inl" style="font-size:.85em">[1.42, 0.34, 0.45, 0.40]</code>.</div>
+      </div>
+
+      <div class="wpanel">
+        <div class="wp-k">fixed learned weights (rose)</div>
+        <p><b>W1</b> is 8 rows × 4 (one hidden neuron per row) with biases <b>b1</b>; <b>W2</b> is 4 rows × 8 (one output neuron per row), biases <b>b2</b> = 0. Sparse on purpose so each worked sum is short and readable.</p>
+      </div>
+
+      <!-- HIDDEN LAYER -->
+      <div class="layer-lab">Hidden layer <span class="cnt">— 8 neurons, each <code class="inl" style="font-size:.85em">tanh(Σ v·w + b)</code></span></div>
+      <div class="hgrid" id="hGrid"></div>
+
+      <!-- OUTPUT LAYER -->
+      <div class="layer-lab">Output layer <span class="cnt">— 4 linear neurons</span><span class="noact">no activation on output</span></div>
+      <div class="ogrid" id="oGrid"></div>
+
+      <!-- DELTA + RESIDUAL -->
+      <div class="layer-lab">FFN output <span class="cnt">— Δffn, then added back onto v</span></div>
+      <div class="dvec" id="dGrid"></div>
+      <div class="resid-line" id="residLine"></div>
+      <div class="ffn-read" id="ffnRead"></div>
+      <div class="indep-note" id="indepNote"></div>
+    </div>
+
+    <p class="stage-note"><span class="key rose">TRY →</span> Watch hidden unit <b>h0</b> (<i>"animate?"</i>) — it fires hardest at <b>0.73</b> because <code class="inl">it</code>'s animacy is high. Drag the <b>animacy</b> slider down and h0's tanh (and the animacy output) drop with it. Every output neuron is linear — <b>no squish</b> — so its number can climb past ±1 unlike the hidden units.</p>
+  </div>
+</section>
+
+<!-- ============ UNDER THE HOOD ============ -->
+<section class="block wrap reveal">
+  <details class="hood">
+    <summary>Show me the actual numbers (input = <span style="color:var(--cyan)">[1.42, 0.34, 0.45, 0.40]</span>)</summary>
+    <div class="hood-body">
+      <p><b>Pre-activations</b> <code>Σ v·w + b</code> for the 8 hidden units:</p>
+      <div class="wrapx"><table>
+        <tr><th>unit</th><th>worked</th><th>pre</th><th>tanh → h</th></tr>
+        <tr><td>h0 animate?</td><td>1.42·1 − 0.5</td><td>0.92</td><td>0.73</td></tr>
+        <tr><td>h1 action?</td><td>0.34·1 − 0.3</td><td>0.04</td><td>0.04</td></tr>
+        <tr><td>h2 state?</td><td>0.45·1 − 0.3</td><td>0.15</td><td>0.15</td></tr>
+        <tr><td>h3 function?</td><td>0.40·1 − 0.3</td><td>0.10</td><td>0.10</td></tr>
+        <tr><td>h4 entity, not verb</td><td>1.42·1 + 0.34·(−0.5) − 0.4</td><td>0.85</td><td>0.69</td></tr>
+        <tr><td>h5 subject-doing</td><td>1.42·0.5 + 0.34·0.5 − 0.5</td><td>0.38</td><td>0.36</td></tr>
+        <tr><td>h6 animate + state</td><td>1.42·0.5 + 0.45·0.5 − 0.5</td><td>0.435</td><td>0.41</td></tr>
+        <tr><td>h7 strong-state only</td><td>0.45·1 − 0.8</td><td>−0.35</td><td>−0.34</td></tr>
+      </table></div>
+      <p>So <code>h ≈ [0.73, 0.04, 0.15, 0.10, 0.69, 0.36, 0.41, −0.34]</code> — <b style="color:var(--amber)">h0</b> fires hardest.</p>
+      <p><b>Output neurons</b> (linear, no tanh): <code>out0 = 0.6·0.73 + 0.4·0.69 = 0.71</code>, <code>out1 = 0.5·0.04 + 0.5·0.36 = 0.20</code>, <code>out2 = 0.5·0.15 + 0.5·(−0.34) = −0.09</code>, <code>out3 = 0.5·0.10 + 0.4·0.41 = 0.21</code>. So <code>Δffn ≈ [0.71, 0.20, −0.09, 0.21]</code>.</p>
+      <p><b>Added back</b> (residual, lesson 8): the token's running vector becomes <code>[1.42+0.71, 0.34+0.20, 0.45−0.09, 0.40+0.21] = [2.13, 0.54, 0.36, 0.61]</code>. The FFN pushed <b style="color:var(--amber)">animacy</b> up further (more clearly <code>cat</code>-flavored) and trimmed the stray <b style="color:var(--rose)">state</b> it had picked up from <code>tired</code>.</p>
+      <p><b>Every token in the sentence runs through this same FFN, independently.</b> Attention shared information between tokens; the FFN never lets them talk. Change the input vector above and only <i>that</i> token's numbers move — the network has no memory of the others.</p>
+    </div>
+  </details>
+</section>
+
+<!-- ============ MYTH / TAKEAWAY ============ -->
+<section class="block wrap reveal">
+  <div class="myth">
+    <div class="m-row"><span class="lbl2 m-x">Myth</span><span class="txt">After attention there's more attention — it's attention all the way down.</span></div>
+    <div class="m-row real"><span class="lbl2 m-r">Reality</span><span class="txt">Half of every block is the FFN: each token pushed through the same little neuron network <b>alone</b>. Attention mixes <i>across</i> tokens; the FFN transforms each token <i>by itself</i>.</span></div>
+  </div>
+  <div class="takeaway">
+    <div class="k">Takeaway</div>
+    <p>The FFN is <b>lesson 4's neuron, stacked</b> — <code class="inl" style="color:var(--rose)">tanh(W1·v + b1)</code> then a <b>linear</b> <code class="inl" style="color:var(--rose)">W2·h + b2</code> — run on one token's vector at a time, then <b>added back</b> onto the residual stream.</p>
+  </div>
+</section>
+
+<!-- ============ SELF-CHECK ============ -->
+<section class="block wrap reveal">
+  <div class="check">
+    <div class="q">How is the FFN different from attention?</div>
+    <div class="opts">
+      <button class="opt" data-correct="0">It's the same operation with more heads.</button>
+      <button class="opt" data-correct="1">Attention mixes information across tokens; the FFN transforms each token's vector on its own, with no other token involved.</button>
+      <button class="opt" data-correct="0">It looks the answer up in a table.</button>
+    </div>
+    <div class="why"><b>Why:</b> attention is the cross-token step (Q·K over all tokens); the FFN runs each token's vector through the lesson-4 neuron independently — every token gets the same network, alone.</div>
+  </div>
+</section>
+
+<!-- ============ PAGER ============ -->
+<nav class="pager wrap">
+  <a href="residual-stream.html" data-nav="prev"><div class="dir">← Previous</div><div class="ttl">Where the blended vector goes</div></a>
+  <a href="unembedding.html" data-nav="next" class="next"><div class="dir">Next →</div><div class="ttl">Vector → next-token logits</div></a>
+</nav>
+
+<footer><div class="wrap">
+  <div>LLM Visual Course · <a href="index.html">all lessons</a> · <a href="/">tbash.xyz</a></div>
+  <div>Use ← → arrow keys to move between lessons.</div>
+</div></footer>
+
+<script src="course-data.js"></script>
+<script src="course.js" defer></script>
+<script>
+/* =========================================================================
+   Lesson 9 — the feed-forward network, COMPUTED live.
+   4 -> 8 (tanh) -> 4 (linear). Reuses ffnForward / matvec / Math.tanh and the
+   FFN / DIM_LABELS globals from course-data.js. Recompute, never replay:
+   nudging the input re-runs the whole net.
+   ========================================================================= */
+(function(){
+  "use strict";
+  const $ = (s,r)=> (r||document).querySelector(s);
+  const MINUS = '−';
+
+  // labels for the 8 hidden units (mirror the W1 comments in course-data.js)
+  const HTAGS = ['animate?','action?','state?','function/glue?','entity, not verb',
+                 'subject-doing','animate + state','strong-state only'];
+  // short labels for the 4 outputs
+  const OTAGS = ['animacy','action','state','function'];
+
+  // number formatting
+  const f2  = (n)=>{ let s = Math.abs(n).toFixed(2); return (n<0?MINUS:'')+s; };
+  const trim = (n)=>{ let s=(Math.round(n*100)/100).toFixed(2); s=s.replace(/\.?0+$/,''); if(s==='-0')s='0'; return s.replace('-',MINUS); };
+
+  // live input, seeded from the documented FFN.in
+  const input = FFN.in.slice();
+
+  /* ---------- input sliders (cyan vector) ---------- */
+  const ivGrid = $('#ivGrid');
+  DIM_LABELS.forEach((lab,i)=>{
+    const cell = document.createElement('div');
+    cell.className = 'iv-cell';
+    cell.innerHTML =
+      `<div class="lb">${lab}</div>`+
+      `<div class="nm" id="ivn${i}">${input[i].toFixed(2)}</div>`+
+      `<input type="range" min="0" max="2" step="0.02" value="${input[i]}" data-i="${i}" aria-label="input ${lab}">`;
+    ivGrid.appendChild(cell);
+  });
+  ivGrid.addEventListener('input', (e)=>{
+    const t = e.target;
+    if(t && t.type==='range'){
+      const i = +t.dataset.i;
+      input[i] = parseFloat(t.value);
+      $('#ivn'+i).textContent = input[i].toFixed(2);
+      render();
+    }
+  });
+  $('#reset').addEventListener('click', ()=>{
+    FFN.in.forEach((v,i)=>{ input[i]=v; $('#ivn'+i).textContent=v.toFixed(2);
+      const r=ivGrid.querySelector('input[data-i="'+i+'"]'); if(r) r.value=v; });
+    render();
+  });
+
+  /* ---------- render everything from the computed forward pass ---------- */
+  function render(){
+    const R = ffnForward(input);          // {pre, hid, out} — computed, not stored
+    const hid = R.hid, pre = R.pre, out = R.out;
+
+    // which hidden unit fires hardest (by activation magnitude)? -> highlight it
+    let hotJ = 0; hid.forEach((h,j)=>{ if(Math.abs(h)>Math.abs(hid[hotJ])) hotJ=j; });
+
+    /* --- hidden tiles --- */
+    const hg = $('#hGrid'); hg.innerHTML='';
+    hid.forEach((h,j)=>{
+      // worked pre-activation from the nonzero W1 weights + bias
+      const terms = [];
+      FFN.W1[j].forEach((w,i)=>{ if(w!==0) terms.push(`${trim(input[i])}<span class="wt">·${trim(w)}</span>`); });
+      const b = FFN.b1[j];
+      let math = terms.join(' + ') + ` <span class="wt">${b<0?MINUS:'+'} ${trim(Math.abs(b))}</span>`;
+      // diverging activation bar centred on 0 (tanh ∈ [−1,1])
+      const mag = Math.min(Math.abs(h),1)*50;             // half-width % of full track
+      const left = h>=0 ? 50 : 50-mag;
+      const neg = h<0;
+      const tile = document.createElement('div');
+      tile.className = 'hn'+(j===hotJ?' hot':'');
+      tile.innerHTML =
+        `<span class="hot-flag">fires hardest</span>`+
+        `<div class="hn-h"><span class="hn-id">h${j}</span><span class="hn-tag">${HTAGS[j]}</span></div>`+
+        `<div class="hn-math">${math} = <span class="pre">${f2(pre[j])}</span></div>`+
+        `<div class="hn-act">`+
+          `<span class="hn-fn">tanh(${f2(pre[j])})</span>`+
+          `<div class="hn-bar"><span class="mid"></span><i class="${neg?'neg':''}" style="left:${left}%;width:${mag}%"></i></div>`+
+          `<span class="hn-out${neg?' neg':''}">${f2(h)}</span>`+
+        `</div>`;
+      hg.appendChild(tile);
+    });
+
+    /* --- output tiles (linear, no activation) --- */
+    const og = $('#oGrid'); og.innerHTML='';
+    out.forEach((o,k)=>{
+      const terms = [];
+      FFN.W2[k].forEach((w,j)=>{ if(w!==0) terms.push(`<span class="wt">${trim(w)}</span>·<span class="hv">${f2(hid[j])}</span> <span style="color:var(--muted-2)">(h${j})</span>`); });
+      const tile = document.createElement('div');
+      tile.className = 'on';
+      tile.innerHTML =
+        `<div class="on-h"><span class="on-id">out${k}</span><span class="on-tag">${OTAGS[k]}</span></div>`+
+        `<div class="on-math">${terms.join(' + ')} = <span class="res">${f2(o)}</span></div>`;
+      og.appendChild(tile);
+    });
+
+    /* --- Δffn vector + residual add-back --- */
+    let upK=0, dnK=-1;
+    out.forEach((o,k)=>{ if(o>out[upK]) upK=k; if(o<0 && (dnK<0||o<out[dnK])) dnK=k; });
+    const dg = $('#dGrid'); dg.innerHTML='';
+    out.forEach((o,k)=>{
+      const cls = k===upK ? ' up' : (k===dnK ? ' dn' : '');
+      const cell = document.createElement('div');
+      cell.className = 'dcell'+cls;
+      cell.innerHTML = `<div class="lb">Δ ${OTAGS[k]}</div><div class="nm">${f2(o)}</div>`;
+      dg.appendChild(cell);
+    });
+
+    // residual line: v + Δffn = new running vector
+    const parts = out.map((o,k)=>
+      `<span class="lab">${OTAGS[k].slice(0,4)}</span> <span class="old">${f2(input[k])}</span> <span class="op">+</span> ${f2(o)} = <span class="new">${f2(input[k]+o)}</span>`
+    );
+    $('#residLine').innerHTML =
+      `<b style="color:var(--muted)">residual (added back):</b> v <span class="op">+</span> Δffn<br>`+
+      parts.join('<br>');
+
+    // human read (computed direction of the change)
+    $('#ffnRead').innerHTML =
+      `The FFN pushed <b class="amber">${OTAGS[upK]}</b> up the most (Δ ${f2(out[upK])}) — making <code class="inl">it</code> more clearly <b class="cyan">cat</b>-flavored`+
+      (dnK>=0 ? ` — and <b class="rose">trimmed ${OTAGS[dnK]}</b> (Δ ${f2(out[dnK])}), the stray signal it had picked up from <code class="inl">tired</code>.` : `.`);
+
+    // independence note
+    $('#indepNote').innerHTML =
+      `<b>Every token runs the SAME FFN, independently.</b> These same 8 hidden units and 4 outputs process <code class="inl" style="font-size:.85em">cat</code>, <code class="inl" style="font-size:.85em">sat</code>, and the rest one at a time — the network never lets two tokens interact. Attention did that job; the FFN only thinks per-token.`;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
