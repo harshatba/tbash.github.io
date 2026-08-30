@@ -9,8 +9,10 @@ external:
 sections:
   - title: Learn
     entries:
-      - title: 🧠 How LLMs Work — a visual course
+      - title: 🧠 How LLMs Work — visual course · Part 1
         url: /tools/llm-visual-course.html
+      - title: ⚡ How LLMs Run Fast — inference efficiency · Part 2
+        url: /tools/llm-inference-efficiency.html
   - title: Games
     entries:
       - title: Sudoku

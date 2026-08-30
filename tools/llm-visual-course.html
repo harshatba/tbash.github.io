@@ -441,6 +441,18 @@
   footer a{color:var(--muted)}
   footer a:hover{color:var(--amber)}
 
+  /* series / cross-part navigation */
+  .backp{font-family:var(--mono);font-size:12px;color:var(--muted-2);margin-bottom:10px;display:block}
+  .backp:hover{color:var(--amber)}
+  .hero-next{margin-top:22px;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  .hero-next a{color:var(--amber)}
+  .hero-next a:hover{color:var(--ink)}
+  .nextcard{display:block;border:1px solid var(--line-strong);border-radius:16px;padding:26px 30px;background:linear-gradient(180deg,var(--panel-2),var(--bg-2));text-decoration:none;transition:.2s}
+  .nextcard:hover{border-color:var(--amber);transform:translateY(-2px)}
+  .np-eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber)}
+  .np-title{font-family:var(--disp);font-weight:600;font-size:1.5rem;color:var(--ink);margin:8px 0}
+  .np-desc{color:var(--muted);font-size:.98rem;max-width:62ch}
+
   @media (prefers-reduced-motion: reduce){
     *{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important}
     html{scroll-behavior:auto}
@@ -458,7 +470,8 @@
   <div class="hero-grid"></div>
   <div class="ambient" id="ambient" aria-hidden="true"></div>
   <div class="wrap">
-    <span class="eyebrow">A visual course · no math required</span>
+    <a class="backp" href="/tools/llm-inference-efficiency.html">Part 2 · How LLMs Run Fast →</a>
+    <span class="eyebrow">A visual course · Part 1 · no math required</span>
     <h1>How a <span class="flow">large language model</span> actually works</h1>
     <p class="lede">ChatGPT, Claude, Gemini — under the hood they're all the same surprisingly simple idea, stacked up billions of times. This is a scroll-through, click-around tour that builds the whole picture from scratch: <span class="strong-ink">tokens</span>, <span class="strong-ink">embeddings</span>, <span class="strong-ink">attention</span>, the <span class="strong-ink">transformer</span>, and the different shapes these models come in. One animation at a time.</p>
 
@@ -471,6 +484,7 @@
     </div>
 
     <div class="scroll-hint"><span class="dot"></span> Scroll to begin · 12 short chapters</div>
+    <div class="hero-next">Already comfortable with the basics? <a href="/tools/llm-inference-efficiency.html">Skip to Part 2 · How LLMs Run Fast →</a></div>
   </div>
 </header>
 
@@ -816,11 +830,19 @@
   </div>
 </section>
 
+<div class="wrap" style="padding-bottom:10px">
+  <a class="nextcard" href="/tools/llm-inference-efficiency.html">
+    <div class="np-eyebrow">Part 2 · continue the course</div>
+    <div class="np-title">How LLMs Run Fast →</div>
+    <div class="np-desc">You know how a model works — now see how it's made cheap and fast to run: quantization, the KV cache, speculative decoding and more. How a 140&nbsp;GB model is squeezed onto one GPU and answers in milliseconds.</div>
+  </a>
+</div>
+
 <footer>
   <div class="wrap">
-    <div class="mono" style="letter-spacing:.14em;color:var(--muted)">END OF COURSE</div>
+    <div class="mono" style="letter-spacing:.14em;color:var(--muted)">END OF PART 1</div>
     <div>A visual, beginner's introduction to large language models and transformers. Numbers and diagrams are simplified for intuition — real models differ in the details, but the shape of the ideas is exactly this.</div>
-    <div style="margin-top:6px"><a href="/">← back to tbash.cc</a></div>
+    <div style="margin-top:6px"><a href="/tools/llm-inference-efficiency.html">Part 2 · How LLMs Run Fast →</a> &nbsp;·&nbsp; <a href="/">back to tbash.cc</a></div>
   </div>
 </footer>
 
