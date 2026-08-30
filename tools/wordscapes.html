@@ -270,12 +270,15 @@
             .wheel-wrap { width: 210px; height: 210px; }
             .wheel-letter { width: 46px; height: 46px; font-size: 1.3rem; }
         }
+    .home-link{position:fixed;top:14px;left:16px;z-index:1000;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;letter-spacing:.04em;color:#94a3b8;background:rgba(15,23,42,.6);border:1px solid rgba(148,163,184,.2);border-radius:8px;padding:6px 11px;text-decoration:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);transition:color .2s,border-color .2s}
+    .home-link:hover{color:#60a5fa;border-color:rgba(96,165,250,.5)}
     </style>
 </head>
 <body>
+    <a class="home-link" href="/">cd ..</a>
     <header>
         <h1>WORDSCAPES</h1>
-        <div class="subtitle"><a href="/">cd ..</a> · swipe letters to build words</div>
+        <div class="subtitle">swipe letters to build words</div>
     </header>
 
     <div class="top-bar">
